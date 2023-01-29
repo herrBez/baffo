@@ -78,7 +78,7 @@ func (c ConfigStats) String() string {
 	s.WriteString("\n===OUTPUT===\n")
 	s.WriteString(c.Output.String())
 	s.WriteString("\n===\n")
-	s.WriteString("\n===Cumulative===\n")
+	s.WriteString("\n===CUMULATIVE===\n")
 	s.WriteString(c.GlobalStats().String())
 	s.WriteString("\n===\n")
 
@@ -91,8 +91,34 @@ func NewPluginSectionStats() PluginSectionStats {
 }
 
 
+
+
 func (ps PluginSectionStats) String() string {
-	return fmt.Sprintf("PN: %s\nPF: %s\nPE: %s\nCF: %s\nCE: %s\n F: %s\n E: %s\n", ps.PluginNames, ps.PluginFields, ps.PluginEnvs, ps.ConditionFields, ps.ConditionEnvs, ps.Fields, ps.Envs)
+	var s bytes.Buffer
+
+	s.WriteString("[Plugin Names     ]:")
+	fmt.Fprintf(&s, "%s", ps.PluginNames)
+	s.WriteString("\n")
+	s.WriteString("[Plugin Fields    ]:")
+	fmt.Fprintf(&s, "%s", ps.PluginFields)
+	s.WriteString("\n")
+	s.WriteString("[Plugin Envs      ]:")
+	fmt.Fprintf(&s, "%s", ps.PluginEnvs)
+	s.WriteString("\n")
+	s.WriteString("[Condition Fields ]:")
+	fmt.Fprintf(&s, "%s", ps.ConditionFields)
+	s.WriteString("\n")
+	s.WriteString("[Condition Envs   ]:")
+	fmt.Fprintf(&s, "%s", ps.ConditionEnvs)
+	s.WriteString("\n")
+	s.WriteString("[Cumulative Fields]:")
+	fmt.Fprintf(&s, "%s", ps.Fields)
+	s.WriteString("\n")
+	s.WriteString("[Cumulative Envs  ]:")
+	fmt.Fprintf(&s, "%s", ps.Envs)
+	// s.WriteString(ps.Envs)
+
+	return s.String()
 }
 
 
@@ -168,13 +194,6 @@ func (f ECSCheck) Run(args []string) error {
 		} else {
 			var tree ast.Config = res.(ast.Config)
 			log.Println(reflect.TypeOf(tree))
-
-
-
-			// var input_plugin_names[] string = getAllPluginNames(tree.Input)
-			// var filter_plugin_names[] string = getAllPluginNames(tree.Filter)
-			// var output_plugin_names[] string = getAllPluginNames(tree.Output)
-
 			cs := NewConfigStats()
 
 			cs.Input = getAllFieldNamesUsedInConditions(tree.Input)
@@ -199,12 +218,6 @@ func collectFields(n ast.Node) [] string {
 
 	var variables [] string;
 	var values [] string;
-
-	// log.Println("Collecting Variables")
-
-	// log.Println(reflect.TypeOf(n))
-
-
 
 	switch node := n.(type) {
 
