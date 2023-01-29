@@ -52,16 +52,11 @@ func NewConfigStats() ConfigStats {
 	}
 }
 
-
-
-
 func (cs ConfigStats) GlobalStats() PluginSectionStats {
 	ps := NewPluginSectionStats()
-
 	ps.merge(cs.Input)
 	ps.merge(cs.Filter)
 	ps.merge(cs.Output)
-
 	return ps
 }
 
@@ -89,9 +84,6 @@ func NewPluginSectionStats() PluginSectionStats {
 	return PluginSectionStats {
 	}
 }
-
-
-
 
 func (ps PluginSectionStats) String() string {
 	var s bytes.Buffer
@@ -216,72 +208,58 @@ func (f ECSCheck) Run(args []string) error {
 
 func collectFields(n ast.Node) [] string {
 
-	var variables [] string;
-	var values [] string;
+	var fields [] string;
+
 
 	switch node := n.(type) {
 
 	case ast.Condition:
 		for _, expression := range node.Expression {
-			variables = append(variables, collectFields(expression)...)
+			fields = append(fields, collectFields(expression)...)
 		}
 
 	case ast.ConditionExpression:
-		variables = append(variables, collectFields(ast.ConditionExpression(node).Condition)...)
+		fields = append(fields, collectFields(node.Condition)...)
 
 	case ast.NegativeConditionExpression:
-		variables = append(variables, collectFields(node.Condition)...)
+		fields = append(fields, collectFields(node.Condition)...)
 
 	case ast.NegativeSelectorExpression:
-		variables = append(variables, collectFields(node.Selector)...)
+		fields = append(fields, collectFields(node.Selector)...)
 
 	case ast.InExpression:
-		variables = append(variables, collectFields(node.LValue)...)
-		variables = append(variables, collectFields(node.RValue)...)
+		fields = append(fields, collectFields(node.LValue)...)
+		fields = append(fields, collectFields(node.RValue)...)
 
 	case ast.NotInExpression:
-		variables = append(variables, collectFields(node.LValue)...)
-		variables = append(variables, collectFields(node.RValue)...)
+		fields = append(fields, collectFields(node.LValue)...)
+		fields = append(fields, collectFields(node.RValue)...)
 
 	case ast.RvalueExpression:
-		variables = append(variables, collectFields(node.RValue)...)
+		fields = append(fields, collectFields(node.RValue)...)
 
 	case ast.CompareExpression:
-		variables = append(variables, collectFields(node.LValue)...)
-		variables = append(variables, collectFields(node.CompareOperator)...)
-		variables = append(variables, collectFields(node.RValue)...)
+		fields = append(fields, collectFields(node.LValue)...)
+		fields = append(fields, collectFields(node.CompareOperator)...)
+		fields = append(fields, collectFields(node.RValue)...)
 
 	case ast.RegexpExpression:
-		variables = append(variables, collectFields(node.LValue)...)
-		variables = append(variables, collectFields(node.RegexpOperator)...)
-		variables = append(variables, collectFields(node.RValue)...)
+		fields = append(fields, collectFields(node.LValue)...)
+		fields = append(fields, collectFields(node.RegexpOperator)...)
+		fields = append(fields, collectFields(node.RValue)...)
 
 	case ast.Selector:
-
-		variables = append(variables, node.String())
-
-		// for _, element := range node.Elements {
-		// 	variables = append(variables, collectFields(element)...)
-		// }
-
-	// case ast.SelectorElement:
-	// 	log.Println(node)
-
+		fields = append(fields, node.String())
 	case ast.StringAttribute:
-		//log.Println("HO TROVATO STRING")
-		values = append(values, node.Value())
+		// values = append(values, node.Value())
 
 	case ast.CompareOperator:
 		// do nothing
 
-
 	default:
-		log.Printf("Unknown type `%s`", reflect.TypeOf(node))
+		log.Panicf("Unknown type `%s`", reflect.TypeOf(node))
 	}
-
-	// log.Println(values)
-
-	return variables
+	return fields
 }
 
 func extractFieldsFromString(s string) ([] string, []string) {
@@ -306,10 +284,8 @@ func extractFieldsFromString(s string) ([] string, []string) {
 		res := strings.Split(rawstring, ":")
 		switch len(res) {
 		case 1:
-			// log.Printf("1: %s", res)
 			envs = append(envs, res[0])
 		case 2:
-			// log.Printf("ENVVAR: %s, ENVVARDEFAULTVALUE: %s", res[0], res[1])
 			envs = append(envs, res[0])
 
 		default:
@@ -325,11 +301,7 @@ func getAllFieldsNamesUsedInAttribute(attr ast.Attribute) ([] string, []string) 
 	var fields [] string
 	var envs [] string
 
-
-
 	switch t := attr.(type) {
-	// case ast.PluginAttribute:
-	// 	log.Printf("Plugin attribute %s", attr)
 
 	case ast.StringAttribute:
 		log.Printf("String attribute %s", t.Value())
@@ -369,11 +341,52 @@ func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection) (Plugi
 		plugin := c.Plugin()
 		psStats.AddPluginNames(plugin.Name())
 
-		for _, attr := range plugin.Attributes {
-			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr)
-			psStats.AddPluginFields(tmpFields...)
-			psStats.AddPluginEnvs(tmpEnvs...)
+		switch plugin.Name() {
+
+		// Grok-Match Attribute should be treated differently
+		case "grok":
+
+			for _, attr := range plugin.Attributes {
+				if(attr.Name() == "match") {
+					tmpFields, _ := getAllFieldsNamesUsedInAttribute(attr)
+
+					log.Printf("Aiuto %s", tmpFields)
+
+					// Grok Match expression are in the form %{TEST:[foo]}
+					// After the getAllFieldsNamesUsedInAttribute TEST:[foo]
+					// We need to extract the field list [foo]
+					for _, tf := range tmpFields {
+
+						res := strings.Split(tf, ":")
+
+						switch len(res) {
+						case 1:
+							// It is only a pattern the fields can be find in the logstash-pattern-core
+							log.Printf("Warning [Line %d]: the pattern `%s` relies on ecs_compatibility", attr.Pos().Line, res[0])
+						case 2:
+							psStats.AddPluginFields(res[1])
+
+						default:
+							log.Panic("D: %s", res)
+						}
+					}
+
+				} else {
+					tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr)
+					psStats.AddPluginFields(tmpFields...)
+					psStats.AddPluginEnvs(tmpEnvs...)
+				}
+			}
+
+		default:
+			for _, attr := range plugin.Attributes {
+				tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr)
+				psStats.AddPluginFields(tmpFields...)
+				psStats.AddPluginEnvs(tmpEnvs...)
+			}
 		}
+
+
 	}
 
 	applyConditionFunc := func(c *ast.Condition) {
