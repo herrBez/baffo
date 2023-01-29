@@ -4,21 +4,18 @@ import (
 	"os"
 	"log"
 	"strings"
-	// "fmt"
-	"github.com/breml/logstash-config/ast/astutil"
-
-
-
-	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
-
-	config "github.com/breml/logstash-config"
-	"github.com/breml/logstash-config/internal/format"
+	"fmt"
+	"bytes"
+	"regexp"
 	"reflect"
 
-
+	"github.com/breml/logstash-config/ast/astutil"
+	"github.com/hashicorp/go-multierror"
+	"github.com/pkg/errors"
+	config "github.com/breml/logstash-config"
+	"github.com/breml/logstash-config/internal/format"
 	ast "github.com/breml/logstash-config/ast"
-	"regexp"
+
 
 
 )
@@ -28,6 +25,114 @@ type ECSCheck struct{}
 func New() ECSCheck {
 	return ECSCheck{}
 }
+
+type ConfigStats struct {
+	Input PluginSectionStats
+	Filter PluginSectionStats
+	Output PluginSectionStats
+}
+
+type PluginSectionStats struct {
+	PluginNames []string // Name of the Plugin
+	PluginFields [] string // Fields used in the Plugin Definition
+	PluginEnvs [] string // Env variables used in the Plugin Definition
+
+	ConditionFields [] string // Fields used in the Branch Conditions
+	ConditionEnvs [] string // Env variables used in the Branch Condition
+
+	Fields []string // Cumulative Fields
+	Envs []string // Cumulative Env Variables
+}
+
+func NewConfigStats() ConfigStats {
+	return ConfigStats {
+		Input: NewPluginSectionStats(),
+		Filter: NewPluginSectionStats(),
+		Output: NewPluginSectionStats(),
+	}
+}
+
+
+
+
+func (cs ConfigStats) GlobalStats() PluginSectionStats {
+	ps := NewPluginSectionStats()
+
+	ps.merge(cs.Input)
+	ps.merge(cs.Filter)
+	ps.merge(cs.Output)
+
+	return ps
+}
+
+
+func (c ConfigStats) String() string {
+	var s bytes.Buffer
+
+	s.WriteString("===INPUT===\n")
+	s.WriteString(c.Input.String())
+	s.WriteString("\n===\n")
+	s.WriteString("===FILTER===\n")
+	s.WriteString(c.Filter.String())
+	s.WriteString("\n===\n")
+	s.WriteString("\n===OUTPUT===\n")
+	s.WriteString(c.Output.String())
+	s.WriteString("\n===\n")
+	s.WriteString("\n===Cumulative===\n")
+	s.WriteString(c.GlobalStats().String())
+	s.WriteString("\n===\n")
+
+	return s.String()
+}
+
+func NewPluginSectionStats() PluginSectionStats {
+	return PluginSectionStats {
+	}
+}
+
+
+func (ps PluginSectionStats) String() string {
+	return fmt.Sprintf("PN: %s\nPF: %s\nPE: %s\nCF: %s\nCE: %s\n F: %s\n E: %s\n", ps.PluginNames, ps.PluginFields, ps.PluginEnvs, ps.ConditionFields, ps.ConditionEnvs, ps.Fields, ps.Envs)
+}
+
+
+
+func (pss *PluginSectionStats) AddPluginNames(names ...string) {
+	pss.PluginNames = append(pss.PluginNames, names...)
+}
+
+func (pss *PluginSectionStats) AddPluginFields(names ...string) {
+	pss.PluginFields = append(pss.PluginFields, names...)
+	pss.Fields = append(pss.Fields, names...)
+}
+
+
+func (pss *PluginSectionStats) AddConditionFields(names ...string) {
+	pss.ConditionFields = append(pss.ConditionFields, names...)
+	pss.Fields = append(pss.Fields, names...)
+}
+
+func (pss *PluginSectionStats) AddPluginEnvs(names ...string) {
+	pss.PluginEnvs = append(pss.PluginEnvs, names...)
+	pss.Envs = append(pss.Envs, names...)
+}
+
+
+func (pss *PluginSectionStats) AddConditionEnvs(names ...string) {
+	pss.ConditionEnvs = append(pss.ConditionEnvs, names...)
+	pss.Envs = append(pss.Envs, names...)
+}
+
+
+func (pss *PluginSectionStats) merge(other PluginSectionStats) {
+	// N.B. There are input, filter and output plugins with the same name (e.g., elasticsearch)
+	pss.AddPluginNames(other.PluginNames...)
+	pss.AddPluginFields(other.PluginFields...)
+	pss.AddPluginEnvs(other.PluginEnvs...)
+	pss.AddConditionFields(other.ConditionFields...)
+	pss.AddConditionEnvs(other.ConditionEnvs...)
+}
+
 
 
 func (f ECSCheck) Run(args []string) error {
@@ -66,35 +171,17 @@ func (f ECSCheck) Run(args []string) error {
 
 
 
-			var input_plugin_names[] string = getAllPluginNames(tree.Input)
-			var filter_plugin_names[] string = getAllPluginNames(tree.Filter)
-			var output_plugin_names[] string = getAllPluginNames(tree.Output)
+			// var input_plugin_names[] string = getAllPluginNames(tree.Input)
+			// var filter_plugin_names[] string = getAllPluginNames(tree.Filter)
+			// var output_plugin_names[] string = getAllPluginNames(tree.Output)
 
-			var input_fields, input_envs = getAllFieldNamesUsedInConditions(tree.Input)
-			var filter_fields, filter_envs = getAllFieldNamesUsedInConditions(tree.Filter)
-			var output_fields, output_envs = getAllFieldNamesUsedInConditions(tree.Output)
+			cs := NewConfigStats()
 
+			cs.Input = getAllFieldNamesUsedInConditions(tree.Input)
+			cs.Filter = getAllFieldNamesUsedInConditions(tree.Filter)
+			cs.Output = getAllFieldNamesUsedInConditions(tree.Output)
 
-
-			// Analyze Input
-			log.Println("=== INPUT ===")
-			log.Printf("PluginNames: %s", input_plugin_names)
-			log.Printf("Fields: %s", input_fields)
-			log.Printf("ENVS: %s", input_envs)
-
-
-			// Analyze Filter
-			log.Println("=== FILTER ===")
-			log.Printf("PluginNames: %s", filter_plugin_names)
-			log.Printf("Fields: %s", filter_fields)
-			log.Printf("ENVS: %s", filter_envs)
-
-			// Analyze Output
-			log.Println("=== OUTPUT ===")
-			log.Printf("PluginNames: %s", output_plugin_names)
-			log.Printf("Fields: %s", output_fields)
-			log.Printf("ENVS: %s", output_envs)
-
+			log.Println(cs)
 
 		}
 	}
@@ -106,24 +193,6 @@ func (f ECSCheck) Run(args []string) error {
 
 	return nil
 }
-
-
-func getAllPluginNames(plugin_section []ast.PluginSection) []string {
-	var plugin_names[] string
-	applyFunc := func(c *astutil.Cursor) {
-		// count++
-		plugin_names = append(plugin_names, c.Plugin().Name())
-	}
-
-	for _, element := range plugin_section {
-		astutil.ApplyPlugins(element.BranchOrPlugins, applyFunc)
-	}
-	return plugin_names;
-}
-
-
-
-type ApplyFunc func(c *ast.Node)
 
 
 func collectFields(n ast.Node) [] string {
@@ -280,32 +349,31 @@ func getAllFieldsNamesUsedInAttribute(attr ast.Attribute) ([] string, []string) 
 }
 
 
-func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection) ([]string, []string) {
-	var fields[] string
-	var envs[] string
+func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection) (PluginSectionStats) {
+	psStats := NewPluginSectionStats()
 
-	applyFunc := func(c *astutil.Cursor) {
-		p := c.Plugin()
+	applyPluginFunc := func(c *astutil.Cursor) {
+		plugin := c.Plugin()
+		psStats.AddPluginNames(plugin.Name())
 
-		for _, attr := range p.Attributes {
+		for _, attr := range plugin.Attributes {
 			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr)
-			fields = append(fields, tmpFields...)
-			envs = append(envs, tmpEnvs...)
+			psStats.AddPluginFields(tmpFields...)
+			psStats.AddPluginEnvs(tmpEnvs...)
 		}
-
-		log.Printf("Fields: %s", fields)
-		log.Printf("Env %s", envs)
-
 	}
 
 	applyConditionFunc := func(c *ast.Condition) {
-		fields = append(fields, collectFields(*c)...)
+		psStats.AddConditionFields(collectFields(*c)...)
 	}
 
 	for _, element := range plugin_section {
-		astutil.ApplyPluginsOrBranch(element.BranchOrPlugins, applyFunc, applyConditionFunc)
+		astutil.ApplyPluginsOrBranch(element.BranchOrPlugins, applyPluginFunc, applyConditionFunc)
 	}
-	return fields, envs;
+
+	log.Println(psStats);
+
+	return psStats;
 }
 
 
