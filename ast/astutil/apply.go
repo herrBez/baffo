@@ -57,6 +57,58 @@ func ApplyPlugins(root []ast.BranchOrPlugin, applyPluginsFunc ApplyPluginsFunc) 
 	return c.parent
 }
 
+type ApplyConditionFunc func(condition *ast.Condition)
+
+
+func ApplyPluginsOrBranch(root []ast.BranchOrPlugin, applyPluginsFunc ApplyPluginsFunc, applyConditionFunc ApplyConditionFunc) (result []ast.BranchOrPlugin) {
+	c := Cursor{
+		parent: root,
+		iter: iterator{
+			index: 0,
+			step:  1,
+		},
+	}
+
+	for {
+		if c.iter.index >= len(c.parent) {
+			break
+		}
+
+		c.iter.step = 1
+
+		switch block := c.parent[c.iter.index].(type) {
+		case ast.Branch:
+
+			applyConditionFunc(&block.IfBlock.Condition)
+
+			block.IfBlock.Block = ApplyPlugins(block.IfBlock.Block, applyPluginsFunc)
+
+			for i := range block.ElseIfBlock {
+				applyConditionFunc(&block.ElseIfBlock[i].Condition)
+				block.ElseIfBlock[i].Block = ApplyPlugins(block.ElseIfBlock[i].Block, applyPluginsFunc)
+			}
+
+			block.ElseBlock.Block = ApplyPlugins(block.ElseBlock.Block, applyPluginsFunc)
+
+			c.parent[c.iter.index] = block
+
+		case ast.Plugin:
+			applyPluginsFunc(&c)
+
+		case nil:
+			applyPluginsFunc(&c)
+
+		default:
+			panic(fmt.Sprintf("type %T for block in ApplyPluginsOrBranch not supported", c.parent[c.iter.index]))
+		}
+
+		c.iter.index += c.iter.step
+	}
+
+	return c.parent
+}
+
+
 // An iterator controls iteration over a slice of nodes.
 type iterator struct {
 	index, step int
