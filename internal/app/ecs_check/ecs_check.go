@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"regexp"
 	"reflect"
+	"path/filepath"
 
 	"github.com/breml/logstash-config/ast/astutil"
 	"github.com/hashicorp/go-multierror"
@@ -15,6 +16,7 @@ import (
 	config "github.com/breml/logstash-config"
 	"github.com/breml/logstash-config/internal/format"
 	ast "github.com/breml/logstash-config/ast"
+	// "github.com/breml/logstash-config/ecs_check/ecs_check_utils"
 
 
 
@@ -30,6 +32,9 @@ type ConfigStats struct {
 	Input PluginSectionStats
 	Filter PluginSectionStats
 	Output PluginSectionStats
+	PipelineOutput []string // List of Output Pipelines
+	PipelineAddress string // List of Input Pipelines
+	Filename string // Filename
 }
 
 type PluginSectionStats struct {
@@ -50,6 +55,12 @@ func NewConfigStats() ConfigStats {
 		Filter: NewPluginSectionStats(),
 		Output: NewPluginSectionStats(),
 	}
+}
+
+func (cs * ConfigStats) merge(other ConfigStats) {
+	cs.Input.merge(other.Input)
+	cs.Filter.merge(other.Filter)
+	cs.Output.merge(other.Output)
 }
 
 func (cs ConfigStats) GlobalStats() PluginSectionStats {
@@ -114,31 +125,76 @@ func (ps PluginSectionStats) String() string {
 }
 
 
+func appendUnique(arr []string, names ...string) []string {
+	for _, name := range names {
+		found := false
+		for _, el := range arr {
+			if el == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			arr = append(arr, name)
+		}
+	}
+	return arr
+}
+
+
 
 func (pss *PluginSectionStats) AddPluginNames(names ...string) {
-	pss.PluginNames = append(pss.PluginNames, names...)
+	pss.PluginNames = appendUnique(pss.PluginNames, names...)
+}
+
+func normalizeField(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+
+	var tmp string = s
+	// Convert to dotted notation
+	// tmp = strings.Replace(s, "][", ".", -1)
+	// tmp = strings.Replace(tmp, "[", "", 1)
+	// tmp = strings.Replace(tmp, "]", "", 1)
+
+	// Convert to Logstash's selector notation
+	// if s[0] != '[' {
+	// 	tmp = "[" + s + "]"
+	// }
+	return tmp
+}
+
+func normalizeFields(arr []string) []string {
+	var res []string
+
+	for _, el := range arr {
+		res = append(res, normalizeField(el))
+	}
+	return res
 }
 
 func (pss *PluginSectionStats) AddPluginFields(names ...string) {
-	pss.PluginFields = append(pss.PluginFields, names...)
-	pss.Fields = append(pss.Fields, names...)
+	pss.PluginFields = appendUnique(pss.PluginFields, normalizeFields(names)...)
+	pss.Fields = appendUnique(pss.Fields, normalizeFields(names)...)
 }
 
 
 func (pss *PluginSectionStats) AddConditionFields(names ...string) {
-	pss.ConditionFields = append(pss.ConditionFields, names...)
-	pss.Fields = append(pss.Fields, names...)
+
+	pss.ConditionFields = appendUnique(pss.ConditionFields, normalizeFields(names)...)
+	pss.Fields = appendUnique(pss.Fields, normalizeFields(names)...)
 }
 
 func (pss *PluginSectionStats) AddPluginEnvs(names ...string) {
-	pss.PluginEnvs = append(pss.PluginEnvs, names...)
-	pss.Envs = append(pss.Envs, names...)
+	pss.PluginEnvs = appendUnique(pss.PluginEnvs, names...)
+	pss.Envs = appendUnique(pss.Envs, names...)
 }
 
 
 func (pss *PluginSectionStats) AddConditionEnvs(names ...string) {
-	pss.ConditionEnvs = append(pss.ConditionEnvs, names...)
-	pss.Envs = append(pss.Envs, names...)
+	pss.ConditionEnvs = appendUnique(pss.ConditionEnvs, names...)
+	pss.Envs = appendUnique(pss.Envs, names...)
 }
 
 
@@ -151,10 +207,30 @@ func (pss *PluginSectionStats) merge(other PluginSectionStats) {
 	pss.AddConditionEnvs(other.ConditionEnvs...)
 }
 
+func WalkAllFilesInDir(dir string) error {
+	return filepath.Walk(dir, func(path string, info os.FileInfo, e error) error {
+			if e != nil {
+					return e
+			}
+
+			// check if it is a regular file (not dir)
+			if info.Mode().IsRegular() {
+					fmt.Println("file name:", info.Name())
+					fmt.Println("file path:", path)
+			}
+			return nil
+	})
+}
+
 
 
 func (f ECSCheck) Run(args []string) error {
 	var result *multierror.Error
+
+
+	var files []string
+
+
 
 	for _, filename := range args {
 		stat, err := os.Stat(filename)
@@ -162,9 +238,26 @@ func (f ECSCheck) Run(args []string) error {
 			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
 		}
 		if stat.IsDir() {
-			continue
+			filepath.Walk(filename, func(path string, info os.FileInfo, e error) error {
+				if e != nil {
+						return e
+				}
+
+				// check if it is a regular file (not dir)
+				if info.Mode().IsRegular() {
+					files = append(files, path)
+				}
+				return nil
+			})
+		} else {
+			files = append(files, filename)
 		}
 
+	}
+
+	global_cs := NewConfigStats()
+
+	for _, filename := range files {
 
 
 		res, err1 := config.ParseFile(filename, config.IgnoreComments(true))
@@ -184,18 +277,35 @@ func (f ECSCheck) Run(args []string) error {
 			// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
 			// continue
 		} else {
+			// fmt.Printf("%s\n", filename)
 			var tree ast.Config = res.(ast.Config)
 			log.Println(reflect.TypeOf(tree))
-			cs := NewConfigStats()
 
-			cs.Input = getAllFieldNamesUsedInConditions(tree.Input)
-			cs.Filter = getAllFieldNamesUsedInConditions(tree.Filter)
-			cs.Output = getAllFieldNamesUsedInConditions(tree.Output)
+			cs := NewConfigStats()
+			cs.Input = getAllFieldNamesUsedInConditions(tree.Input, "input")
+			cs.Filter = getAllFieldNamesUsedInConditions(tree.Filter, "filter")
+			cs.Output = getAllFieldNamesUsedInConditions(tree.Output, "output")
+
+			cs.PipelineAddress = getPipelineAddress(tree.Input)
+			if cs.PipelineAddress == "" {
+				cs.PipelineAddress = filename
+			}
+
+			cs.PipelineOutput = getPipelineOutputAddress(tree.Output)
 
 			log.Println(cs)
 
+			global_cs.merge(cs)
+			// cs.Filename = filename
+			// fmt.Println(createGraph(cs))
+
+
 		}
 	}
+
+	log.Println("---------------")
+
+	log.Println(global_cs)
 
 	if result != nil {
 		result.ErrorFormat = format.MultiErr
@@ -256,6 +366,18 @@ func collectFields(n ast.Node) [] string {
 	case ast.CompareOperator:
 		// do nothing
 
+	case ast.RegexpOperator:
+		// do nothing
+
+	case ast.NumberAttribute:
+		// do nothing
+
+	case ast.Regexp:
+		// do nothing
+
+	case ast.ArrayAttribute:
+		// TODO: Iterate over array attribute
+
 	default:
 		log.Panicf("Unknown type `%s`", reflect.TypeOf(node))
 	}
@@ -297,15 +419,16 @@ func extractFieldsFromString(s string) ([] string, []string) {
 }
 
 
-func getAllFieldsNamesUsedInAttribute(attr ast.Attribute) ([] string, []string) {
+func getAllFieldsNamesUsedInAttribute(attr ast.Attribute, keep_key bool) ([] string, []string) {
 	var fields [] string
 	var envs [] string
 
 	switch t := attr.(type) {
 
 	case ast.StringAttribute:
-		log.Printf("String attribute %s", t.Value())
+		log.Printf("String attribute %s and its value %s", t, t.Value())
 		fields, envs = extractFieldsFromString(t.Value())
+		// fields = append(fields, t.Name())
 
 
 	case ast.NumberAttribute:
@@ -314,15 +437,24 @@ func getAllFieldsNamesUsedInAttribute(attr ast.Attribute) ([] string, []string) 
 	case ast.HashAttribute:
 		log.Println("Hash attribute %v", t)
 		for _, entry := range t.Entries {
-			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(entry.Value)
+			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(entry.Value, keep_key)
 			fields = append(fields, tmpFields...)
 			envs = append(envs, tmpEnvs...)
+			if keep_key {
+				key_string := entry.Key.ValueString()
+
+				tmpFields, tmpEnvs = extractFieldsFromString(key_string[1:len(key_string)-1])
+
+				fields = append(fields, tmpFields...)
+				envs = append(envs, tmpEnvs...)
+			}
+
 		}
 
 	case ast.ArrayAttribute:
 		log.Println("Array attribute %v", t)
 		for _, element := range t.Attributes {
-			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(element)
+			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(element, keep_key)
 			fields = append(fields, tmpFields...)
 			envs = append(envs, tmpEnvs...)
 		}
@@ -333,59 +465,164 @@ func getAllFieldsNamesUsedInAttribute(attr ast.Attribute) ([] string, []string) 
 	return fields, envs
 }
 
+func contains(arr [] string, s string) bool {
+	for _, el := range(arr) {
+		if(s == el) {
+			return true
+		}
+	}
+	return false
+}
 
-func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection) (PluginSectionStats) {
+func getPipelineAddress(plugin_section []ast.PluginSection) (string) {
+	var pipelineAddress string
+
+	applyPluginFunc := func(c *astutil.Cursor) {
+		plugin := c.Plugin()
+
+		if plugin.Name() == "pipeline" {
+			for _, attr := range plugin.Attributes {
+				if attr.Name() == "address" {
+					switch t := attr.(type) {
+
+					case ast.StringAttribute:
+						pipelineAddress = t.Value()
+					default:
+						log.Panicf("Known translate attribute should be of type string?")
+					}
+				}
+			}
+		}
+	}
+
+	for _, element := range plugin_section {
+		astutil.ApplyPlugins(element.BranchOrPlugins, applyPluginFunc)
+	}
+
+	return pipelineAddress
+}
+
+func getPipelineOutputAddress(plugin_section []ast.PluginSection) ([]string) {
+	var OutputPipelines []string
+	var count int = 0
+
+	applyPluginFunc := func(c *astutil.Cursor) {
+		plugin := c.Plugin()
+
+		if plugin.Name() == "pipeline" {
+			for _, attr := range plugin.Attributes {
+				if attr.Name() == "send_to" {
+					switch t := attr.(type) {
+
+					case ast.StringAttribute:
+						OutputPipelines = append(OutputPipelines, t.Value())
+					default:
+						log.Panicf("Known translate attribute should be of type string?")
+					}
+				}
+			}
+		} else {
+			count += 1
+			OutputPipelines = append(OutputPipelines, fmt.Sprintf("%s-%d", plugin.Name(), count))
+		}
+	}
+
+	for _, element := range plugin_section {
+		astutil.ApplyPlugins(element.BranchOrPlugins, applyPluginFunc)
+	}
+
+	return OutputPipelines
+}
+
+
+type DealWithPlugin func(ps * PluginSectionStats, plugin ast.Plugin)
+
+
+
+
+var inputFilterPluginMap = map[string]DealWithPlugin {
+	"pipeline": DealWithPluginWithoutFields,
+}
+
+var filterPluginMap = map[string]DealWithPlugin{
+	"grok": DealWithGrok,
+	"dissect": DealWithDissect,
+	"translate": DealWithTranslate,
+}
+
+var outputFilterPluginMap = map[string]DealWithPlugin{
+	"elasticsearch": DealWithOutputElasticsearch,
+	"pipeline": DealWithPluginWithoutFields,
+}
+
+var globalPluginMap = map[string](map[string]DealWithPlugin) {
+	"input": inputFilterPluginMap,
+	"filter": filterPluginMap,
+	"output": outputFilterPluginMap,
+}
+
+
+
+func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection, section string) (PluginSectionStats) {
 	psStats := NewPluginSectionStats()
 
 	applyPluginFunc := func(c *astutil.Cursor) {
 		plugin := c.Plugin()
 		psStats.AddPluginNames(plugin.Name())
 
-		switch plugin.Name() {
+		// Get rid of default attributes
+		var common_attr_list []ast.Attribute
 
-		// Grok-Match Attribute should be treated differently
-		case "grok":
+		var plugin_specific_attr []ast.Attribute
 
-			for _, attr := range plugin.Attributes {
-				if(attr.Name() == "match") {
-					tmpFields, _ := getAllFieldsNamesUsedInAttribute(attr)
-
-					log.Printf("Aiuto %s", tmpFields)
-
-					// Grok Match expression are in the form %{TEST:[foo]}
-					// After the getAllFieldsNamesUsedInAttribute TEST:[foo]
-					// We need to extract the field list [foo]
-					for _, tf := range tmpFields {
-
-						res := strings.Split(tf, ":")
-
-						switch len(res) {
-						case 1:
-							// It is only a pattern the fields can be find in the logstash-pattern-core
-							log.Printf("Warning [Line %d]: the pattern `%s` relies on ecs_compatibility", attr.Pos().Line, res[0])
-						case 2:
-							psStats.AddPluginFields(res[1])
-
-						default:
-							log.Panic("D: %s", res)
-						}
-					}
-
-				} else {
-					tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr)
-					psStats.AddPluginFields(tmpFields...)
-					psStats.AddPluginEnvs(tmpEnvs...)
-				}
-			}
-
-		default:
-			for _, attr := range plugin.Attributes {
-				tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr)
-				psStats.AddPluginFields(tmpFields...)
-				psStats.AddPluginEnvs(tmpEnvs...)
+		for _, attr := range plugin.Attributes {
+			if contains([]string{"add_field", "add_tag", "enable_metric", "id", "periodic_flush", "remove_field", "remove_tag"}, attr.Name()) {
+				common_attr_list = append(common_attr_list, attr)
+			} else {
+				plugin_specific_attr = append(plugin_specific_attr, attr)
 			}
 		}
 
+		for _, attr := range common_attr_list {
+			switch attr.Name() {
+				// Common Option
+				// HashKey --> Field
+				// HashValue --> Deal with expansion
+			case "add_field", "remove_field":
+				log.Println(attr)
+				tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, true)
+				psStats.AddPluginFields(tmpFields...)
+				psStats.AddPluginEnvs(tmpEnvs...)
+
+			case "add_tag", "remove_tag":
+				log.Println(attr)
+				tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, false)
+				psStats.AddPluginFields(tmpFields...)
+				psStats.AddPluginEnvs(tmpEnvs...)
+
+			default:
+				// add_tag, enable_metric, id, periodic_flush
+				// Do nothing --> they cannot contain anything interesting
+			}
+		}
+
+		myFunc, found := globalPluginMap[section][plugin.Name()]
+
+		if found  {
+			if plugin != nil {
+				log.Println(plugin.Name())
+				myFunc(&psStats, *plugin)
+			}
+		} else { // Apply Default-Unknown Case
+			DealWithGenericPlugin(&psStats, *plugin)
+		}
+
+
+		for _, f := range psStats.Fields {
+			if strings.Contains(f, ".") {
+				log.Printf("Warning: field %s contain dots and does not using Logstash's Field Selector convention")
+			}
+		}
 
 	}
 
@@ -396,10 +633,26 @@ func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection) (Plugi
 	for _, element := range plugin_section {
 		astutil.ApplyPluginsOrBranch(element.BranchOrPlugins, applyPluginFunc, applyConditionFunc)
 	}
-
-	log.Println(psStats);
-
 	return psStats;
 }
 
 
+// https://mermaid.live/edit
+func createGraph(cs ConfigStats) string {
+	var s bytes.Buffer
+
+	//  s.WriteString("graph TD\n")
+	for _, output := range cs.PipelineOutput {
+		if cs.PipelineAddress != "" {
+			s.WriteString(cs.PipelineAddress)
+		} else {
+			s.WriteString(cs.Filename)
+		}
+		s.WriteString(" --> ")
+		s.WriteString(output)
+		s.WriteString("\n")
+	}
+
+
+	return s.String()
+}
