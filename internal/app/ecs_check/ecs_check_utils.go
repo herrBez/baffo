@@ -20,6 +20,17 @@ import (
 
 )
 
+type ECSCompatibilityDefinedFields struct {
+	Input map[string]map[string][]string `json:"input"`
+	Filter map[string]map[string][]string  `json:"filter"`
+	Output map[string]map[string][]string `json:"output"`
+}
+
+// type AddedPluginField struct{
+// 	V8 []string `json:"v8"`
+// 	Disabled []string `json: "disabled"`
+// }
+
 // Pipeline input, output do not contain fields
 func DealWithPluginWithoutFields(psStats * PluginSectionStats, plugin ast.Plugin) {
 	// Do Nothing
@@ -28,7 +39,7 @@ func DealWithPluginWithoutFields(psStats * PluginSectionStats, plugin ast.Plugin
 func DealWithGenericPlugin(psStats * PluginSectionStats, plugin ast.Plugin) {
 	for _, attr := range plugin.Attributes {
 		tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, false)
-		psStats.AddPluginFields(tmpFields...)
+		psStats.AddFieldsUsedByThePlugin(tmpFields...)
 		psStats.AddPluginEnvs(tmpEnvs...)
 	}
 }
@@ -39,7 +50,7 @@ func DealWithTranslate(psStats * PluginSectionStats, plugin ast.Plugin) {
 			switch t := attr.(type) {
 
 			case ast.StringAttribute:
-				psStats.AddPluginFields(t.Value())
+				psStats.AddFieldsUsedByThePlugin(t.Value())
 
 			default:
 				log.Panicf("Known translate attribute should be of type string?")
@@ -49,8 +60,18 @@ func DealWithTranslate(psStats * PluginSectionStats, plugin ast.Plugin) {
 	}
 }
 
-
-
+func DealWithInputFile(psStats * PluginSectionStats, plugin ast.Plugin) {
+	// ecs_compatibility = "disabled" // TODO: Take the default?
+	// for _, attr := range plugin.Attributes {
+	// 	if attr.Name() == "ecs_compatibility" {
+	// 		if attr.Value() == "disabled" {
+	// 			psStats.AddedPluginFields = append(psStats.AddedPluginFields, []string{"[host][name]", "[log][file][path]"})
+	// 		} else {
+	// 			psStats.AddedPluginFields = append(psStats.AddedPluginFields, []string{"[host][name]", "[log][file][path]"})
+	// 		}
+	// 	}
+	// }
+}
 
 // Grok-Match Attribute should be treated differently
 func DealWithGrok(psStats * PluginSectionStats, plugin ast.Plugin) {
@@ -73,7 +94,7 @@ func DealWithGrok(psStats * PluginSectionStats, plugin ast.Plugin) {
 					// It is only a pattern the fields can be find in the logstash-pattern-core
 					log.Printf("Warning [Line %d]: the pattern `%s` relies on ecs_compatibility", attr.Pos().Line, res[0])
 				case 2:
-					psStats.AddPluginFields(res[1])
+					psStats.AddFieldsUsedByThePlugin(res[1])
 
 				default:
 					log.Panic("D: %s", res)
@@ -81,7 +102,7 @@ func DealWithGrok(psStats * PluginSectionStats, plugin ast.Plugin) {
 			}
 		} else {
 			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, false)
-			psStats.AddPluginFields(tmpFields...)
+			psStats.AddFieldsUsedByThePlugin(tmpFields...)
 			psStats.AddPluginEnvs(tmpEnvs...)
 		}
 	}
@@ -102,12 +123,12 @@ func DealWithDissect(psStats * PluginSectionStats, plugin ast.Plugin) {
 				ttf := strings.Replace(tf, "->", "", -1)
 				ttf = strings.Replace(ttf, "+", "", -1)
 				ttf = strings.Replace(ttf, "?", "", -1)
-				psStats.AddPluginFields(ttf)
+				psStats.AddFieldsUsedByThePlugin(ttf)
 			}
 
 	} else {
 		tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, false)
-		psStats.AddPluginFields(tmpFields...)
+		psStats.AddFieldsUsedByThePlugin(tmpFields...)
 		psStats.AddPluginEnvs(tmpEnvs...)
 	}
 	}
@@ -130,7 +151,7 @@ func DealWithOutputElasticsearch(psStats * PluginSectionStats, plugin ast.Plugin
 			// Ignore
 		} else {
 			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, false)
-			psStats.AddPluginFields(tmpFields...)
+			psStats.AddFieldsUsedByThePlugin(tmpFields...)
 			psStats.AddPluginEnvs(tmpEnvs...)
 		}
 	}

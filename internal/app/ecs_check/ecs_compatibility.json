@@ -1,0 +1,68 @@
+{
+    "input": {
+        "file": {
+            "disabled": [
+                "[host]",
+                "[path]"
+            ],
+            "v8": [
+                "[host][name]",
+                "[log][file][path]"
+            ]
+        },
+        "beats": {
+            "disabled": [
+                "[host]",
+                "[@metadata][ip_address]",
+                "[@metadata][tls_peer][status]",
+                "[@metadata][tls_peer][protocol]",
+                "[@metadata][tls_peer][subject]",
+                "[@metadata][tls_peer][cipher_suite]"
+            ],
+            "v8": [
+                "[@metadata][input][beats][host][name]",
+                "[@metadata][input][beats][host][ip]",
+                "[@metadata][tls_peer][status]",
+                "[@metadata][input][beats][tls][version_protocol]",
+                "[@metadata][input][beats][tls][client][subject]",
+                "[@metadata][input][beats][tls][cipher]"
+            ]
+        },
+        "kafka": {
+            "disabled": [
+                "[@metadata][kafka][topic]",
+                "[@metadata][kafka][consumer_group]",
+                "[@metadata][kafka][partition]",
+                "[@metadata][kafka][offset]",
+                "[@metadata][kafka][key]",
+                "[@metadata][kafka][timestamp]"
+            ],
+            "v8": [
+                "[@metadata][kafka][topic]",
+                "[@metadata][kafka][consumer_group]",
+                "[@metadata][kafka][partition]",
+                "[@metadata][kafka][offset]",
+                "[@metadata][kafka][key]",
+                "[@metadata][kafka][timestamp]"
+            ]
+        },
+        "syslog": {
+            "disabled": [
+                "[priority]",
+                "[facility_label]",
+                "[facility]",
+                "[severity_label]",
+                "[severity]"
+            ],
+            "v8": [
+                "[log][syslog][priority]",
+                "[log][syslog][facility][code]",
+                "[log][syslog][facility][name]",
+                "[log][syslog][syslog][code]",
+                "[log][syslog][syslog][name]"
+            ]
+        }
+    },
+    "filter": {},
+    "output": {}
+}

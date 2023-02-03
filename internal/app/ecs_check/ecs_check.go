@@ -17,8 +17,7 @@ import (
 	"github.com/breml/logstash-config/internal/format"
 	ast "github.com/breml/logstash-config/ast"
 	// "github.com/breml/logstash-config/ecs_check/ecs_check_utils"
-
-
+	"encoding/json"
 
 )
 
@@ -39,7 +38,10 @@ type ConfigStats struct {
 
 type PluginSectionStats struct {
 	PluginNames []string // Name of the Plugin
-	PluginFields [] string // Fields used in the Plugin Definition
+
+	FieldsAddedByThePlugin []string // Fields added by the plugin
+
+	FieldsUsedByThePlugin [] string // Fields used in the Plugin Definition
 	PluginEnvs [] string // Env variables used in the Plugin Definition
 
 	ConditionFields [] string // Fields used in the Branch Conditions
@@ -102,8 +104,11 @@ func (ps PluginSectionStats) String() string {
 	s.WriteString("[Plugin Names     ]:")
 	fmt.Fprintf(&s, "%s", ps.PluginNames)
 	s.WriteString("\n")
-	s.WriteString("[Plugin Fields    ]:")
-	fmt.Fprintf(&s, "%s", ps.PluginFields)
+	s.WriteString("[Fields Added     ]")
+	fmt.Fprintf(&s, "%s", ps.FieldsAddedByThePlugin)
+	s.WriteString("\n")
+	s.WriteString("[Fields Used      ]:")
+	fmt.Fprintf(&s, "%s", ps.FieldsUsedByThePlugin)
 	s.WriteString("\n")
 	s.WriteString("[Plugin Envs      ]:")
 	fmt.Fprintf(&s, "%s", ps.PluginEnvs)
@@ -174,11 +179,15 @@ func normalizeFields(arr []string) []string {
 	return res
 }
 
-func (pss *PluginSectionStats) AddPluginFields(names ...string) {
-	pss.PluginFields = appendUnique(pss.PluginFields, normalizeFields(names)...)
+func (pss *PluginSectionStats) AddFieldsUsedByThePlugin(names ...string) {
+	pss.FieldsUsedByThePlugin = appendUnique(pss.FieldsUsedByThePlugin, normalizeFields(names)...)
 	pss.Fields = appendUnique(pss.Fields, normalizeFields(names)...)
 }
 
+func (pss *PluginSectionStats) AddFieldsAddedByThePlugin(names ...string) {
+	pss.FieldsAddedByThePlugin = appendUnique(pss.FieldsAddedByThePlugin, names...)
+	// TODO Add to "Fields"
+}
 
 func (pss *PluginSectionStats) AddConditionFields(names ...string) {
 
@@ -201,7 +210,8 @@ func (pss *PluginSectionStats) AddConditionEnvs(names ...string) {
 func (pss *PluginSectionStats) merge(other PluginSectionStats) {
 	// N.B. There are input, filter and output plugins with the same name (e.g., elasticsearch)
 	pss.AddPluginNames(other.PluginNames...)
-	pss.AddPluginFields(other.PluginFields...)
+	pss.AddFieldsAddedByThePlugin(other.FieldsAddedByThePlugin...)
+	pss.AddFieldsUsedByThePlugin(other.FieldsUsedByThePlugin...)
 	pss.AddPluginEnvs(other.PluginEnvs...)
 	pss.AddConditionFields(other.ConditionFields...)
 	pss.AddConditionEnvs(other.ConditionEnvs...)
@@ -402,7 +412,7 @@ func extractFieldsFromString(s string) ([] string, []string) {
 
 		rawstring := string(m[2:len(m)-1])
 
-		log.Println("Env Variable found %s", rawstring)
+		// log.Println("Env Variable found %s", rawstring)
 		res := strings.Split(rawstring, ":")
 		switch len(res) {
 		case 1:
@@ -561,27 +571,58 @@ var globalPluginMap = map[string](map[string]DealWithPlugin) {
 	"output": outputFilterPluginMap,
 }
 
+func getAttributeValue(attr ast.Attribute) string {
+	switch t := attr.(type) {
+
+	case ast.StringAttribute:
+		return t.Value()
+	default:
+		log.Panicf("The attribute %s should be of type string?", t.Name())
+	}
+	return ""
+}
 
 
 func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection, section string) (PluginSectionStats) {
 	psStats := NewPluginSectionStats()
 
+	byteValue, err := os.ReadFile("./internal/app/ecs_check/ecs_compatibility.json")
+
+	if err != nil {
+		log.Panic("Could not open file")
+	}
+	var ecsCDF ECSCompatibilityDefinedFields
+	json.Unmarshal(byteValue, &ecsCDF)
+
 	applyPluginFunc := func(c *astutil.Cursor) {
 		plugin := c.Plugin()
-		psStats.AddPluginNames(plugin.Name())
+		psStats.AddPluginNames(section + "-" + plugin.Name())
 
 		// Get rid of default attributes
 		var common_attr_list []ast.Attribute
 
 		var plugin_specific_attr []ast.Attribute
 
+		var ecs_compatibility_value = "disabled" // TODO Inherit it from somewhere else
+
 		for _, attr := range plugin.Attributes {
 			if contains([]string{"add_field", "add_tag", "enable_metric", "id", "periodic_flush", "remove_field", "remove_tag"}, attr.Name()) {
 				common_attr_list = append(common_attr_list, attr)
+			} else if attr.Name() == "ecs_compatibility" {
+				ecs_compatibility_value = getAttributeValue(attr)
 			} else {
 				plugin_specific_attr = append(plugin_specific_attr, attr)
 			}
 		}
+
+		// Add static information on fields added by ecs_compatibility
+		val, ok := ecsCDF.Input[plugin.Name()][ecs_compatibility_value]
+		if ok {
+			psStats.AddFieldsAddedByThePlugin(val...)
+		} else {
+			log.Printf("We don't have ecs_compatibility info about the plugin %s-%s", section, plugin.Name())
+		}
+
 
 		for _, attr := range common_attr_list {
 			switch attr.Name() {
@@ -591,13 +632,13 @@ func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection, sectio
 			case "add_field", "remove_field":
 				log.Println(attr)
 				tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, true)
-				psStats.AddPluginFields(tmpFields...)
+				psStats.AddFieldsUsedByThePlugin(tmpFields...)
 				psStats.AddPluginEnvs(tmpEnvs...)
 
 			case "add_tag", "remove_tag":
 				log.Println(attr)
 				tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, false)
-				psStats.AddPluginFields(tmpFields...)
+				psStats.AddFieldsUsedByThePlugin(tmpFields...)
 				psStats.AddPluginEnvs(tmpEnvs...)
 
 			default:
