@@ -61,6 +61,29 @@
                 "[log][syslog][syslog][code]",
                 "[log][syslog][syslog][name]"
             ]
+        },
+        "http": {
+            "disabled": [
+                "[host]",
+                "[headers]",
+                "[headers][http_version]",
+                "[headers][http_user_agent]",
+                "[headers][http_host]",
+                "[headers][request_method]",
+                "[headers][request_path]",
+                "[headers][content_length]",
+                "[headers][content_type]"
+            ],
+            "v8": [
+                "[host][ip]",
+                "[@metadata][input][http][request][headers]",
+                "[http][version]",
+                "[user_agent][original]",
+                "[url][domain]",
+                "[url][port]",
+                "[http][request][body][bytes]",
+                "[http][request][mime_type]"
+            ]
         }
     },
     "filter": {},

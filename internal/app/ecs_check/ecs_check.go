@@ -2,10 +2,11 @@ package ecs_check
 
 import (
 	"os"
-	"log"
+	// "log"
+    "github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"strings"
 	"fmt"
-	"bytes"
 	"regexp"
 	"reflect"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	config "github.com/breml/logstash-config"
 	"github.com/breml/logstash-config/internal/format"
 	ast "github.com/breml/logstash-config/ast"
-	// "github.com/breml/logstash-config/ecs_check/ecs_check_utils"
 	"encoding/json"
 
 )
@@ -27,219 +27,13 @@ func New() ECSCheck {
 	return ECSCheck{}
 }
 
-type ConfigStats struct {
-	Input PluginSectionStats
-	Filter PluginSectionStats
-	Output PluginSectionStats
-	PipelineOutput []string // List of Output Pipelines
-	PipelineAddress string // List of Input Pipelines
-	Filename string // Filename
-}
-
-type PluginSectionStats struct {
-	PluginNames []string // Name of the Plugin
-
-	FieldsAddedByThePlugin []string // Fields added by the plugin
-
-	FieldsUsedByThePlugin [] string // Fields used in the Plugin Definition
-	PluginEnvs [] string // Env variables used in the Plugin Definition
-
-	ConditionFields [] string // Fields used in the Branch Conditions
-	ConditionEnvs [] string // Env variables used in the Branch Condition
-
-	Fields []string // Cumulative Fields
-	Envs []string // Cumulative Env Variables
-}
-
-func NewConfigStats() ConfigStats {
-	return ConfigStats {
-		Input: NewPluginSectionStats(),
-		Filter: NewPluginSectionStats(),
-		Output: NewPluginSectionStats(),
-	}
-}
-
-func (cs * ConfigStats) merge(other ConfigStats) {
-	cs.Input.merge(other.Input)
-	cs.Filter.merge(other.Filter)
-	cs.Output.merge(other.Output)
-}
-
-func (cs ConfigStats) GlobalStats() PluginSectionStats {
-	ps := NewPluginSectionStats()
-	ps.merge(cs.Input)
-	ps.merge(cs.Filter)
-	ps.merge(cs.Output)
-	return ps
-}
-
-
-func (c ConfigStats) String() string {
-	var s bytes.Buffer
-
-	s.WriteString("===INPUT===\n")
-	s.WriteString(c.Input.String())
-	s.WriteString("\n===\n")
-	s.WriteString("===FILTER===\n")
-	s.WriteString(c.Filter.String())
-	s.WriteString("\n===\n")
-	s.WriteString("\n===OUTPUT===\n")
-	s.WriteString(c.Output.String())
-	s.WriteString("\n===\n")
-	s.WriteString("\n===CUMULATIVE===\n")
-	s.WriteString(c.GlobalStats().String())
-	s.WriteString("\n===\n")
-
-	return s.String()
-}
-
-func NewPluginSectionStats() PluginSectionStats {
-	return PluginSectionStats {
-	}
-}
-
-func (ps PluginSectionStats) String() string {
-	var s bytes.Buffer
-
-	s.WriteString("[Plugin Names     ]:")
-	fmt.Fprintf(&s, "%s", ps.PluginNames)
-	s.WriteString("\n")
-	s.WriteString("[Fields Added     ]")
-	fmt.Fprintf(&s, "%s", ps.FieldsAddedByThePlugin)
-	s.WriteString("\n")
-	s.WriteString("[Fields Used      ]:")
-	fmt.Fprintf(&s, "%s", ps.FieldsUsedByThePlugin)
-	s.WriteString("\n")
-	s.WriteString("[Plugin Envs      ]:")
-	fmt.Fprintf(&s, "%s", ps.PluginEnvs)
-	s.WriteString("\n")
-	s.WriteString("[Condition Fields ]:")
-	fmt.Fprintf(&s, "%s", ps.ConditionFields)
-	s.WriteString("\n")
-	s.WriteString("[Condition Envs   ]:")
-	fmt.Fprintf(&s, "%s", ps.ConditionEnvs)
-	s.WriteString("\n")
-	s.WriteString("[Cumulative Fields]:")
-	fmt.Fprintf(&s, "%s", ps.Fields)
-	s.WriteString("\n")
-	s.WriteString("[Cumulative Envs  ]:")
-	fmt.Fprintf(&s, "%s", ps.Envs)
-	// s.WriteString(ps.Envs)
-
-	return s.String()
-}
-
-
-func appendUnique(arr []string, names ...string) []string {
-	for _, name := range names {
-		found := false
-		for _, el := range arr {
-			if el == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			arr = append(arr, name)
-		}
-	}
-	return arr
-}
-
-
-
-func (pss *PluginSectionStats) AddPluginNames(names ...string) {
-	pss.PluginNames = appendUnique(pss.PluginNames, names...)
-}
-
-func normalizeField(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-
-	var tmp string = s
-	// Convert to dotted notation
-	// tmp = strings.Replace(s, "][", ".", -1)
-	// tmp = strings.Replace(tmp, "[", "", 1)
-	// tmp = strings.Replace(tmp, "]", "", 1)
-
-	// Convert to Logstash's selector notation
-	// if s[0] != '[' {
-	// 	tmp = "[" + s + "]"
-	// }
-	return tmp
-}
-
-func normalizeFields(arr []string) []string {
-	var res []string
-
-	for _, el := range arr {
-		res = append(res, normalizeField(el))
-	}
-	return res
-}
-
-func (pss *PluginSectionStats) AddFieldsUsedByThePlugin(names ...string) {
-	pss.FieldsUsedByThePlugin = appendUnique(pss.FieldsUsedByThePlugin, normalizeFields(names)...)
-	pss.Fields = appendUnique(pss.Fields, normalizeFields(names)...)
-}
-
-func (pss *PluginSectionStats) AddFieldsAddedByThePlugin(names ...string) {
-	pss.FieldsAddedByThePlugin = appendUnique(pss.FieldsAddedByThePlugin, names...)
-	// TODO Add to "Fields"
-}
-
-func (pss *PluginSectionStats) AddConditionFields(names ...string) {
-
-	pss.ConditionFields = appendUnique(pss.ConditionFields, normalizeFields(names)...)
-	pss.Fields = appendUnique(pss.Fields, normalizeFields(names)...)
-}
-
-func (pss *PluginSectionStats) AddPluginEnvs(names ...string) {
-	pss.PluginEnvs = appendUnique(pss.PluginEnvs, names...)
-	pss.Envs = appendUnique(pss.Envs, names...)
-}
-
-
-func (pss *PluginSectionStats) AddConditionEnvs(names ...string) {
-	pss.ConditionEnvs = appendUnique(pss.ConditionEnvs, names...)
-	pss.Envs = appendUnique(pss.Envs, names...)
-}
-
-
-func (pss *PluginSectionStats) merge(other PluginSectionStats) {
-	// N.B. There are input, filter and output plugins with the same name (e.g., elasticsearch)
-	pss.AddPluginNames(other.PluginNames...)
-	pss.AddFieldsAddedByThePlugin(other.FieldsAddedByThePlugin...)
-	pss.AddFieldsUsedByThePlugin(other.FieldsUsedByThePlugin...)
-	pss.AddPluginEnvs(other.PluginEnvs...)
-	pss.AddConditionFields(other.ConditionFields...)
-	pss.AddConditionEnvs(other.ConditionEnvs...)
-}
-
-func WalkAllFilesInDir(dir string) error {
-	return filepath.Walk(dir, func(path string, info os.FileInfo, e error) error {
-			if e != nil {
-					return e
-			}
-
-			// check if it is a regular file (not dir)
-			if info.Mode().IsRegular() {
-					fmt.Println("file name:", info.Name())
-					fmt.Println("file path:", path)
-			}
-			return nil
-	})
-}
-
-
-
 func (f ECSCheck) Run(args []string) error {
 	var result *multierror.Error
 
-
 	var files []string
 
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	// log.SetOutput(os.Stdout)
 
 
 	for _, filename := range args {
@@ -262,39 +56,31 @@ func (f ECSCheck) Run(args []string) error {
 		} else {
 			files = append(files, filename)
 		}
+	}
 
+	if len(files) == 0 {
+		log.Error().Msg("At least a file is expected")
+		os.Exit(1)
 	}
 
 	global_cs := NewConfigStats()
 
 	for _, filename := range files {
 
-
 		res, err1 := config.ParseFile(filename, config.IgnoreComments(true))
 
-
 		if err1 != nil {
-			log.Println(err1)
-
-			log.Println(res)
-			log.Println(reflect.TypeOf(res))
-
-			// if errMsg, hasErr := config.GetFarthestFailure(); hasErr {
-			// 	if !strings.Contains(err.Error(), errMsg) {
-			// 		err = errors.Errorf("%s: %v\n%s", filename, err, errMsg)
-			// 	}
-			// }
-			// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
-			// continue
+			log.Warn().Msgf("Could not parse file '%s', because of '%s'. Ignored File", filename, err1)
+			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err1))
+			continue
 		} else {
 			// fmt.Printf("%s\n", filename)
 			var tree ast.Config = res.(ast.Config)
-			log.Println(reflect.TypeOf(tree))
 
 			cs := NewConfigStats()
-			cs.Input = getAllFieldNamesUsedInConditions(tree.Input, "input")
-			cs.Filter = getAllFieldNamesUsedInConditions(tree.Filter, "filter")
-			cs.Output = getAllFieldNamesUsedInConditions(tree.Output, "output")
+			cs.Input = getAllFieldNamesUsedInPluginSection(tree.Input, "input")
+			cs.Filter = getAllFieldNamesUsedInPluginSection(tree.Filter, "filter")
+			cs.Output = getAllFieldNamesUsedInPluginSection(tree.Output, "output")
 
 			cs.PipelineAddress = getPipelineAddress(tree.Input)
 			if cs.PipelineAddress == "" {
@@ -303,19 +89,16 @@ func (f ECSCheck) Run(args []string) error {
 
 			cs.PipelineOutput = getPipelineOutputAddress(tree.Output)
 
-			log.Println(cs)
+			log.Debug().Msg(cs.String())
 
 			global_cs.merge(cs)
 			// cs.Filename = filename
 			// fmt.Println(createGraph(cs))
-
-
 		}
 	}
 
-	log.Println("---------------")
 
-	log.Println(global_cs)
+	fmt.Println(global_cs)
 
 	if result != nil {
 		result.ErrorFormat = format.MultiErr
@@ -326,72 +109,83 @@ func (f ECSCheck) Run(args []string) error {
 }
 
 
-func collectFields(n ast.Node) [] string {
+type GetFieldsEnvs func(ast.Node) ([]string, []string)
+
+
+func pairWiseAppendUnique(tf []string, te []string, n ast.Node, fs GetFieldsEnvs) {
+	tmpFields, tmpEnvs := fs(n)
+	tf = appendUnique(tf, tmpFields...)
+	te = appendUnique(te, tmpEnvs...)
+}
+
+
+func collectConditionFields(n ast.Node) ([] string, []string) {
 
 	var fields [] string;
-
+	var envs [] string;
 
 	switch node := n.(type) {
 
 	case ast.Condition:
 		for _, expression := range node.Expression {
-			fields = append(fields, collectFields(expression)...)
+			pairWiseAppendUnique(fields, envs, expression, collectConditionFields)
+			// fields = appendUnique(fields, collectConditionFields(expression)...)
 		}
 
 	case ast.ConditionExpression:
-		fields = append(fields, collectFields(node.Condition)...)
+		pairWiseAppendUnique(fields, envs, node.Condition, collectConditionFields)
 
 	case ast.NegativeConditionExpression:
-		fields = append(fields, collectFields(node.Condition)...)
+		pairWiseAppendUnique(fields, envs, node.Condition, collectConditionFields)
+		// fields = appendUnique(fields, collectConditionFields(node.Condition)...)
 
 	case ast.NegativeSelectorExpression:
-		fields = append(fields, collectFields(node.Selector)...)
+		pairWiseAppendUnique(fields, envs, node.Selector, collectConditionFields)
 
 	case ast.InExpression:
-		fields = append(fields, collectFields(node.LValue)...)
-		fields = append(fields, collectFields(node.RValue)...)
+		pairWiseAppendUnique(fields, envs, node.LValue, collectConditionFields)
+		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
 
 	case ast.NotInExpression:
-		fields = append(fields, collectFields(node.LValue)...)
-		fields = append(fields, collectFields(node.RValue)...)
+		pairWiseAppendUnique(fields, envs, node.LValue, collectConditionFields)
+		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
 
 	case ast.RvalueExpression:
-		fields = append(fields, collectFields(node.RValue)...)
+		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
 
 	case ast.CompareExpression:
-		fields = append(fields, collectFields(node.LValue)...)
-		fields = append(fields, collectFields(node.CompareOperator)...)
-		fields = append(fields, collectFields(node.RValue)...)
+		pairWiseAppendUnique(fields, envs, node.LValue, collectConditionFields)
+		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
+		// node.CompareOperator cannot cannot contain fields nor envs
+		// pairWiseAppendUnique(fields, envs, node.CompareOperator, collectConditionFields)
+
 
 	case ast.RegexpExpression:
-		fields = append(fields, collectFields(node.LValue)...)
-		fields = append(fields, collectFields(node.RegexpOperator)...)
-		fields = append(fields, collectFields(node.RValue)...)
+		pairWiseAppendUnique(fields, envs, node.LValue, collectConditionFields)
+		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
+		// node.RegexpOperator cannot contain fields nor envs
+		// pairWiseAppendUnique(fields, envs, node.RegexpOperator, collectConditionFields)
 
 	case ast.Selector:
-		fields = append(fields, node.String())
+		fields = appendUnique(fields, node.String())
 	case ast.StringAttribute:
-		// values = append(values, node.Value())
-
-	case ast.CompareOperator:
-		// do nothing
-
-	case ast.RegexpOperator:
-		// do nothing
+		tmpFields, tmpEnvs := extractFieldsFromString(node.Value())
+		fields = appendUnique(fields, tmpFields...)
+		envs = appendUnique(fields, tmpEnvs...)
 
 	case ast.NumberAttribute:
-		// do nothing
-
+		// A number attribute (i.e., a number literal) cannot contain a variable. Do Nothing
 	case ast.Regexp:
-		// do nothing
+		// A regexp expression cannot contain a variable. Do Nothing...
 
 	case ast.ArrayAttribute:
-		// TODO: Iterate over array attribute
-
+		for _, attr := range node.Attributes {
+			pairWiseAppendUnique(fields, envs, attr, collectConditionFields)
+		}
 	default:
-		log.Panicf("Unknown type `%s`", reflect.TypeOf(node))
+		log.Panic().Msgf("Unknown type `%s`", reflect.TypeOf(node))
 	}
-	return fields
+	return fields, envs
 }
 
 func extractFieldsFromString(s string) ([] string, []string) {
@@ -436,16 +230,16 @@ func getAllFieldsNamesUsedInAttribute(attr ast.Attribute, keep_key bool) ([] str
 	switch t := attr.(type) {
 
 	case ast.StringAttribute:
-		log.Printf("String attribute %s and its value %s", t, t.Value())
+		log.Debug().Msgf("String attribute %s and its value %s", t, t.Value())
 		fields, envs = extractFieldsFromString(t.Value())
 		// fields = append(fields, t.Name())
 
 
 	case ast.NumberAttribute:
-		log.Printf("Number attribute %f", t.Value())
+		log.Debug().Msgf("Number attribute %f", t.Value())
 
 	case ast.HashAttribute:
-		log.Println("Hash attribute %v", t)
+		log.Debug().Msgf("Hash attribute %v", t)
 		for _, entry := range t.Entries {
 			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(entry.Value, keep_key)
 			fields = append(fields, tmpFields...)
@@ -462,7 +256,7 @@ func getAllFieldsNamesUsedInAttribute(attr ast.Attribute, keep_key bool) ([] str
 		}
 
 	case ast.ArrayAttribute:
-		log.Println("Array attribute %v", t)
+		log.Debug().Msgf("Array attribute %v", t)
 		for _, element := range t.Attributes {
 			tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(element, keep_key)
 			fields = append(fields, tmpFields...)
@@ -470,7 +264,7 @@ func getAllFieldsNamesUsedInAttribute(attr ast.Attribute, keep_key bool) ([] str
 		}
 
 	default:
-		log.Printf("Unknown Attribute Type `%s`", reflect.TypeOf(t))
+		log.Warn().Msgf("Unknown Attribute Type `%s`", reflect.TypeOf(t))
 	}
 	return fields, envs
 }
@@ -484,92 +278,7 @@ func contains(arr [] string, s string) bool {
 	return false
 }
 
-func getPipelineAddress(plugin_section []ast.PluginSection) (string) {
-	var pipelineAddress string
 
-	applyPluginFunc := func(c *astutil.Cursor) {
-		plugin := c.Plugin()
-
-		if plugin.Name() == "pipeline" {
-			for _, attr := range plugin.Attributes {
-				if attr.Name() == "address" {
-					switch t := attr.(type) {
-
-					case ast.StringAttribute:
-						pipelineAddress = t.Value()
-					default:
-						log.Panicf("Known translate attribute should be of type string?")
-					}
-				}
-			}
-		}
-	}
-
-	for _, element := range plugin_section {
-		astutil.ApplyPlugins(element.BranchOrPlugins, applyPluginFunc)
-	}
-
-	return pipelineAddress
-}
-
-func getPipelineOutputAddress(plugin_section []ast.PluginSection) ([]string) {
-	var OutputPipelines []string
-	var count int = 0
-
-	applyPluginFunc := func(c *astutil.Cursor) {
-		plugin := c.Plugin()
-
-		if plugin.Name() == "pipeline" {
-			for _, attr := range plugin.Attributes {
-				if attr.Name() == "send_to" {
-					switch t := attr.(type) {
-
-					case ast.StringAttribute:
-						OutputPipelines = append(OutputPipelines, t.Value())
-					default:
-						log.Panicf("Known translate attribute should be of type string?")
-					}
-				}
-			}
-		} else {
-			count += 1
-			OutputPipelines = append(OutputPipelines, fmt.Sprintf("%s-%d", plugin.Name(), count))
-		}
-	}
-
-	for _, element := range plugin_section {
-		astutil.ApplyPlugins(element.BranchOrPlugins, applyPluginFunc)
-	}
-
-	return OutputPipelines
-}
-
-
-type DealWithPlugin func(ps * PluginSectionStats, plugin ast.Plugin)
-
-
-
-
-var inputFilterPluginMap = map[string]DealWithPlugin {
-	"pipeline": DealWithPluginWithoutFields,
-}
-
-var filterPluginMap = map[string]DealWithPlugin{
-	"grok": DealWithGrok,
-	"dissect": DealWithDissect,
-	"translate": DealWithTranslate,
-}
-
-var outputFilterPluginMap = map[string]DealWithPlugin{
-	"elasticsearch": DealWithOutputElasticsearch,
-	"pipeline": DealWithPluginWithoutFields,
-}
-
-var globalPluginMap = map[string](map[string]DealWithPlugin) {
-	"input": inputFilterPluginMap,
-	"filter": filterPluginMap,
-	"output": outputFilterPluginMap,
-}
 
 func getAttributeValue(attr ast.Attribute) string {
 	switch t := attr.(type) {
@@ -577,26 +286,28 @@ func getAttributeValue(attr ast.Attribute) string {
 	case ast.StringAttribute:
 		return t.Value()
 	default:
-		log.Panicf("The attribute %s should be of type string?", t.Name())
+		log.Panic().Msgf("The attribute %s should be of type string?", t.Name())
 	}
 	return ""
 }
 
-
-func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection, section string) (PluginSectionStats) {
+func getAllFieldNamesUsedInPluginSection(plugin_section []ast.PluginSection, section string) (PluginSectionStats) {
 	psStats := NewPluginSectionStats()
 
 	byteValue, err := os.ReadFile("./internal/app/ecs_check/ecs_compatibility.json")
 
 	if err != nil {
-		log.Panic("Could not open file")
+		log.Panic().Msg("Could not open file")
 	}
 	var ecsCDF ECSCompatibilityDefinedFields
 	json.Unmarshal(byteValue, &ecsCDF)
 
 	applyPluginFunc := func(c *astutil.Cursor) {
+
+		pluginPsStats := NewPluginSectionStats()
+
 		plugin := c.Plugin()
-		psStats.AddPluginNames(section + "-" + plugin.Name())
+		pluginPsStats.AddPluginNames(section + "-" + plugin.Name())
 
 		// Get rid of default attributes
 		var common_attr_list []ast.Attribute
@@ -618,32 +329,32 @@ func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection, sectio
 		// Add static information on fields added by ecs_compatibility
 		val, ok := ecsCDF.Input[plugin.Name()][ecs_compatibility_value]
 		if ok {
-			psStats.AddFieldsAddedByThePlugin(val...)
+			pluginPsStats.AddFieldsAddedByThePlugin(val...)
 		} else {
 			log.Printf("We don't have ecs_compatibility info about the plugin %s-%s", section, plugin.Name())
 		}
 
-
+		// Deal with Common Attributes that can be defined in any plugin
 		for _, attr := range common_attr_list {
 			switch attr.Name() {
 				// Common Option
 				// HashKey --> Field
 				// HashValue --> Deal with expansion
 			case "add_field", "remove_field":
-				log.Println(attr)
+				log.Debug().Msg(attr.String())
 				tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, true)
-				psStats.AddFieldsUsedByThePlugin(tmpFields...)
-				psStats.AddPluginEnvs(tmpEnvs...)
+				pluginPsStats.AddFieldsUsedByThePlugin(tmpFields...)
+				pluginPsStats.AddPluginEnvs(tmpEnvs...)
 
 			case "add_tag", "remove_tag":
-				log.Println(attr)
+				log.Debug().Msg(attr.String())
 				tmpFields, tmpEnvs := getAllFieldsNamesUsedInAttribute(attr, false)
-				psStats.AddFieldsUsedByThePlugin(tmpFields...)
-				psStats.AddPluginEnvs(tmpEnvs...)
+				pluginPsStats.AddFieldsUsedByThePlugin(tmpFields...)
+				pluginPsStats.AddPluginEnvs(tmpEnvs...)
 
 			default:
-				// add_tag, enable_metric, id, periodic_flush
-				// Do nothing --> they cannot contain anything interesting
+				// enable_metric, id, periodic_flush
+				// Do nothing --> they cannot contain any fields
 			}
 		}
 
@@ -651,11 +362,12 @@ func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection, sectio
 
 		if found  {
 			if plugin != nil {
-				log.Println(plugin.Name())
-				myFunc(&psStats, *plugin)
+				log.Debug().Msgf("Plugin %s has a func", plugin.Name())
+				myFunc(&pluginPsStats, *plugin)
 			}
-		} else { // Apply Default-Unknown Case
-			DealWithGenericPlugin(&psStats, *plugin)
+		} else { // Apply Default-Unknown Case. Get all Values as fields
+			log.Warn().Msgf("The plugin %s-%s is not known. Consider contributing :). In the meantime all strings will be treated as potential fields", section, plugin.Name())
+			DealWithGenericPlugin(&pluginPsStats, *plugin)
 		}
 
 
@@ -664,11 +376,17 @@ func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection, sectio
 				log.Printf("Warning: field %s contain dots and does not using Logstash's Field Selector convention")
 			}
 		}
+		fmt.Println(plugin.Pos())
+		fmt.Println(pluginPsStats)
+
+		psStats.merge(pluginPsStats)
 
 	}
 
 	applyConditionFunc := func(c *ast.Condition) {
-		psStats.AddConditionFields(collectFields(*c)...)
+		tmpFields, tmpEnvs := collectConditionFields(*c)
+		psStats.AddConditionFields(tmpFields...)
+		psStats.AddConditionEnvs(tmpEnvs...)
 	}
 
 	for _, element := range plugin_section {
@@ -678,22 +396,3 @@ func getAllFieldNamesUsedInConditions(plugin_section []ast.PluginSection, sectio
 }
 
 
-// https://mermaid.live/edit
-func createGraph(cs ConfigStats) string {
-	var s bytes.Buffer
-
-	//  s.WriteString("graph TD\n")
-	for _, output := range cs.PipelineOutput {
-		if cs.PipelineAddress != "" {
-			s.WriteString(cs.PipelineAddress)
-		} else {
-			s.WriteString(cs.Filename)
-		}
-		s.WriteString(" --> ")
-		s.WriteString(output)
-		s.WriteString("\n")
-	}
-
-
-	return s.String()
-}
