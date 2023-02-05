@@ -67,6 +67,7 @@ func makeRootCmd(version string) *cobra.Command {
 	rootCmd.AddCommand(makeFormatCmd())
 	rootCmd.AddCommand(makeLintCmd())
 	rootCmd.AddCommand(makeECSCheckCmd())
+	rootCmd.AddCommand(makeTranspileCmd())
 
 	return rootCmd
 }
