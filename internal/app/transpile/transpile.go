@@ -318,6 +318,17 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 	return ingestProcessors
 }
 
+func DealWithMissingTranspiler(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+	constraintTranspiled := transpileConstraint(constraint)
+	if constraintTranspiled == nil {
+		tmp := ""
+		constraintTranspiled = &tmp
+	}
+
+	log.Printf("[WARN] Plugin %s is not yet supported. Consider Making a contribution :)\nHere is the translated if-condition '%s'", plugin.Name(), *constraintTranspiled)
+	return []IngestProcessor{}
+}
+
 var transpiler = map[string]map[string]TranspileProcessor{
 	"input": map[string]TranspileProcessor{},
 	"filter": map[string]TranspileProcessor{
@@ -354,6 +365,7 @@ func buildIngestPipeline(c ast.Config) {
 		f, ok := transpiler["filter"][c.Plugin().Name()]
 		if !ok {
 			fmt.Printf("There is no handler for the plugin %s\n", c.Plugin().Name())
+			f = DealWithMissingTranspiler
 		}
 		ip.Processors = append(ip.Processors, f(*c.Plugin(), constraint)...)
 
