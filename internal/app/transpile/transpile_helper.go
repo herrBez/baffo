@@ -258,3 +258,34 @@ func (ip AppendProcessor) MarshalJSON() ([]byte, error) {
 		},
 	)
 }
+
+type GsubProcessor struct {
+	Field         string            `json:"field,omitempty"`
+	Pattern       string            `json:"patterns,omitempty"`
+	Replacement   string            `json:"replacement"`
+	TargetField   *string           `json:"target_field"`
+	IgnoreMissing bool              `json:"ignore_missing,omitempty"`
+	Description   *string           `json:"description,omitempty"`
+	If            *string           `json:"if,omitempty"`
+	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
+	Tag           string            `json:"tag"`
+	OnFailure     []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ap GsubProcessor) String() string {
+	return StringHelper(ap)
+}
+
+func (ap GsubProcessor) IngestProcessorType() string {
+	return "gsub"
+}
+
+func (ip GsubProcessor) MarshalJSON() ([]byte, error) {
+	type GsubProcessorAlias GsubProcessor
+
+	return json.Marshal(
+		map[string]GsubProcessorAlias{
+			ip.IngestProcessorType(): (GsubProcessorAlias)(ip),
+		},
+	)
+}

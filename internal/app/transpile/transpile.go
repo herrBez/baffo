@@ -353,7 +353,32 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				counter += 1
 
 			default: // uppercase/lowercase require an Array
-				log.Panic("Explode")
+				log.Printf("Mutate filter attribute '%s' not supported", attr.Name())
+			}
+
+		case "gsub":
+			// Assuming only the field
+			switch tAttributes := attr.(type) {
+			case ast.ArrayAttribute:
+
+				gsubexpression := getArrayStringAttributes(tAttributes)
+
+				if len(gsubexpression)%3 != 0 {
+					log.Printf("Something does not go")
+				}
+
+				for i := 0; i < len(gsubexpression); i += 3 {
+					ingestProcessors = append(ingestProcessors,
+						GsubProcessor{
+							Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
+							If:          transpileConstraint(constraint),
+							Field:       gsubexpression[i],
+							Pattern:     gsubexpression[i+1],
+							Replacement: gsubexpression[i+2],
+							OnFailure:   nil,
+							Tag:         fmt.Sprintf("%s-%d", id, counter),
+						})
+				}
 			}
 
 		}
@@ -437,12 +462,12 @@ func DealWithMissingTranspiler(plugin ast.Plugin, constraint Constraints) []Inge
 }
 
 var transpiler = map[string]map[string]TranspileProcessor{
-	"input": map[string]TranspileProcessor{},
-	"filter": map[string]TranspileProcessor{
+	"input": {},
+	"filter": {
 		"mutate": DealWithMutate,
 		"grok":   DealWithGrok,
 	},
-	"output": map[string]TranspileProcessor{},
+	"output": {},
 }
 
 func transpileConstraint(constraint Constraints) *string {
