@@ -193,7 +193,7 @@ func getHashAttributeKeyValue(attr ast.Attribute) ([]string, []string) {
 			switch tValue := entry.Value.(type) {
 			case ast.StringAttribute:
 				values = append(values, tValue.Value())
-				
+
 			default:
 				log.Panic("Unexpected key of type not string")
 			}
@@ -226,13 +226,12 @@ func getArrayStringAttributes(attr ast.Attribute) []string {
 		for _, el := range tattr.Attributes {
 			values = append(values, getStringAttributeString(el))
 		}
-		
-	default: log.Panicf("I will only an array of strings")
+
+	default:
+		log.Panicf("I will only an array of strings")
 	}
 	return values
 }
-
-
 
 func hashAttributeToMap(attr ast.Attribute) map[string]string {
 	m := map[string]string{}
@@ -241,15 +240,19 @@ func hashAttributeToMap(attr ast.Attribute) map[string]string {
 		for _, entry := range tattr.Entries {
 			var keyString string
 			var valueString string
-			
+
 			switch tKey := entry.Key.(type) {
-			case ast.StringAttribute: keyString = tKey.Value()
-			default: log.Panicf("Expecting a string for the keys")
+			case ast.StringAttribute:
+				keyString = tKey.Value()
+			default:
+				log.Panicf("Expecting a string for the keys")
 			}
 
 			switch tValue := entry.Value.(type) {
-			case ast.StringAttribute: valueString = tValue.Value()
-			default: log.Panicf("Expecting a string")
+			case ast.StringAttribute:
+				valueString = tValue.Value()
+			default:
+				log.Panicf("Expecting a string")
 			}
 
 			m[keyString] = valueString
@@ -288,7 +291,7 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 			for i := range keys {
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
-						Description: plugin.Comment.String() + attr.CommentBlock(),
+						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
 						If:          constraintTranspiled,
 						Value:       values[i],
 						Field:       keys[i],
@@ -304,7 +307,7 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 			for i := range keys {
 				ingestProcessors = append(ingestProcessors,
 					RenameProcessor{
-						Description: plugin.Comment.String() + attr.CommentBlock(),
+						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
 						If:          constraintTranspiled,
 						TargetField: values[i],
 						Field:       keys[i],
@@ -321,12 +324,13 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
-						Description: plugin.Comment.String() + attr.CommentBlock(),
-						If:          constraintTranspiled,
-						CopyFrom:    keys[i],
-						Field:       values[i],
-						OnFailure:   nil,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
+
+						If:        constraintTranspiled,
+						CopyFrom:  keys[i],
+						Field:     values[i],
+						OnFailure: nil,
+						Tag:       fmt.Sprintf("%s-%d", id, counter),
 					})
 				counter += 1
 			}
@@ -338,7 +342,7 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 					ingestProcessors = append(ingestProcessors,
 						CaseProcessor{
 							Type:        attr.Name(), // either uppercase or lowercase
-							Description: plugin.Comment.String() + attr.CommentBlock(),
+							Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
 							If:          transpileConstraint(constraint),
 							TargetField: getStringAttributeString(el),
 							Field:       getStringAttributeString(el),
@@ -384,7 +388,7 @@ func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 			for i := range keys {
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
-						Description: plugin.Comment.String() + attr.CommentBlock(),
+						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
 						If:          constraintTranspiled,
 						Value:       values[i],
 						Field:       keys[i],
@@ -393,14 +397,28 @@ func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 					})
 				counter += 1
 			}
-		case "match": 
-			
+		case "match":
+			helpPattern := hashAttributeToMapArray(attr)
+			// TODO: Deal with multiple keys, currently only the last is used
+			for key := range helpPattern {
+				gp.Patterns = helpPattern[key]
+			}
+
 		case "ecs_compatibility":
 			gp.ECSCompatibility = getStringAttributeString(attr)
 		case "pattern_definitions":
 			gp.PatternDefinitions = hashAttributeToMap(attr)
 		case "tag_on_failure":
-			
+			gp.OnFailure = []IngestProcessor{AppendProcessor{
+				Tag:         fmt.Sprintf("append-tag-%s-%d", id, counter),
+				Description: getStringPointer("Append Tag on Failure"),
+				Field:       "tags",
+				Value:       getArrayStringAttributes(attr),
+			}}
+
+		default:
+			log.Printf("Pattern '%s' is currently not supported", attr.Name())
+
 		}
 	}
 	ingestProcessors = append(ingestProcessors, gp)
@@ -422,7 +440,7 @@ var transpiler = map[string]map[string]TranspileProcessor{
 	"input": map[string]TranspileProcessor{},
 	"filter": map[string]TranspileProcessor{
 		"mutate": DealWithMutate,
-		"grok": DealWithGrok,
+		"grok":   DealWithGrok,
 	},
 	"output": map[string]TranspileProcessor{},
 }
