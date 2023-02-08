@@ -9,7 +9,7 @@ import (
 func makeTranspileCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "transpile [path ...]",
-		Short:         "identify ecs_compatibility problems",
+		Short:         "transpile a subset of Logstash to Ingest Pipeline",
 		RunE:          runTranspile,
 		SilenceErrors: true,
 	}

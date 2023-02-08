@@ -89,7 +89,6 @@ func (ingestPipeline IngestPipeline) String() string {
 type IngestProcessor interface {
 	String() string
 	IngestProcessorType() string
-	ToOutputMap() map[string]interface{} // Function that get rid of unneded keys
 	// SetTag(string)
 }
 
@@ -124,12 +123,6 @@ func (sp SetProcessor) String() string {
 	return StringHelper(sp)
 }
 
-func (sp SetProcessor) ToOutputMap() map[string]interface{} {
-	m := map[string]interface{}{}
-
-	return m
-}
-
 func (sp SetProcessor) IngestProcessorType() string {
 	return "set"
 }
@@ -153,9 +146,6 @@ func (sp RenameProcessor) IngestProcessorType() string {
 	return "rename"
 }
 
-func (sp RenameProcessor) ToOutputMap() map[string]interface{} {
-	return map[string]interface{}{}
-}
 
 // Type for lowercase/uppercase
 type CaseProcessor struct {
@@ -181,3 +171,48 @@ func (cp CaseProcessor) IngestProcessorType() string {
 func (sp CaseProcessor) ToOutputMap() map[string]interface{} {
 	return map[string]interface{}{}
 }
+
+// Type for lowercase/uppercase
+type GrokProcessor struct {
+	Field 				  string            `json:"field,omitempty"`
+	Patterns              []string            `json:"patterns,omitempty"`
+	PatternDefinitions 	  map[string]string `json:"pattern_definitions,omitempty"`
+	ECSCompatibility      string            `json:"ecs_compatibility,omitempty"`
+	TraceMatch            bool              `json:"trace_match,omitempty"`
+	IgnoreMissing         bool              `json:"ignore_missing,omitempty"`
+	Description           string            `json:"description"`
+	If                    *string           `json:"if,omitempty"`
+	IgnoreFailure         bool              `json:"ignore_failure,omitempty"`
+	OnFailure             []IngestProcessor `json:"on_failure,omitempty"`
+	Tag                   string            `json:"tag"`
+	ingestPipeline        IngestPipeline    `json:"-"` // 
+}
+
+func (gp GrokProcessor) String() string {
+	return StringHelper(gp)
+}
+
+func (gp GrokProcessor) IngestProcessorType() string {
+	return "grok"
+}
+
+type AppendProcessor struct {
+	Field 				  string            `json:"field,omitempty"`
+	Value                 string            `json:"value,omitempty"`
+	AllowDuplicates 	  bool              `json:"allow_duplicates,omitempty"`
+	MediaType             *string           `json:"media_type,omitempty"`
+	Description           string            `json:"description"`
+	If                    *string           `json:"if,omitempty"`
+	IgnoreFailure         bool              `json:"ignore_failure,omitempty"`
+	OnFailure             []IngestProcessor `json:"on_failure,omitempty"`
+	Tag                   string            `json:"tag"`
+}
+
+func (ap AppendProcessor) String() string {
+	return StringHelper(ap)
+}
+
+func (ap AppendProcessor) IngestProcessorType() string {
+	return "AppendProcessor"
+}
+

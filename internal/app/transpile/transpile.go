@@ -193,6 +193,7 @@ func getHashAttributeKeyValue(attr ast.Attribute) ([]string, []string) {
 			switch tValue := entry.Value.(type) {
 			case ast.StringAttribute:
 				values = append(values, tValue.Value())
+				
 			default:
 				log.Panic("Unexpected key of type not string")
 			}
@@ -216,6 +217,45 @@ func getStringAttributeString(attr ast.Attribute) string {
 		log.Panic("Not expected")
 	}
 	return ""
+}
+
+func getArrayStringAttributes(attr ast.Attribute) []string {
+	var values []string
+	switch tattr := attr.(type) {
+	case ast.ArrayAttribute:
+		for _, el := range tattr.Attributes {
+			values = append(values, getStringAttributeString(el))
+		}
+		
+	default: log.Panicf("I will only an array of strings")
+	}
+	return values
+}
+
+
+
+func hashAttributeToMap(attr ast.Attribute) map[string]string {
+	m := map[string]string{}
+	switch tattr := attr.(type) {
+	case ast.HashAttribute:
+		for _, entry := range tattr.Entries {
+			var keyString string
+			var valueString string
+			
+			switch tKey := entry.Key.(type) {
+			case ast.StringAttribute: keyString = tKey.Value()
+			default: log.Panicf("Expecting a string for the keys")
+			}
+
+			switch tValue := entry.Value.(type) {
+			case ast.StringAttribute: valueString = tValue.Value()
+			default: log.Panicf("Expecting a string")
+			}
+
+			m[keyString] = valueString
+		}
+	}
+	return m
 }
 
 // https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go
@@ -318,6 +358,55 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 	return ingestProcessors
 }
 
+func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+	ingestProcessors := []IngestProcessor{}
+
+	id, err := plugin.ID()
+	if err != nil {
+		// Autogenerate plugin-id
+		id = plugin.Name() + "-" + randomString(2)
+	}
+
+	counter := 0 // Counter used to increment the tag
+
+	constraintTranspiled := transpileConstraint(constraint)
+
+	gp := GrokProcessor{
+		Tag: id,
+	}
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		// It is a common field
+		case "add_field":
+			keys, values := getHashAttributeKeyValue(attr)
+
+			for i := range keys {
+				ingestProcessors = append(ingestProcessors,
+					SetProcessor{
+						Description: plugin.Comment.String() + attr.CommentBlock(),
+						If:          constraintTranspiled,
+						Value:       values[i],
+						Field:       keys[i],
+						OnFailure:   nil,
+						Tag:         fmt.Sprintf("%s-%d", id, counter),
+					})
+				counter += 1
+			}
+		case "match": 
+			
+		case "ecs_compatibility":
+			gp.ECSCompatibility = getStringAttributeString(attr)
+		case "pattern_definitions":
+			gp.PatternDefinitions = hashAttributeToMap(attr)
+		case "tag_on_failure":
+			
+		}
+	}
+	ingestProcessors = append(ingestProcessors, gp)
+	return ingestProcessors
+}
+
 func DealWithMissingTranspiler(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 	constraintTranspiled := transpileConstraint(constraint)
 	if constraintTranspiled == nil {
@@ -333,6 +422,7 @@ var transpiler = map[string]map[string]TranspileProcessor{
 	"input": map[string]TranspileProcessor{},
 	"filter": map[string]TranspileProcessor{
 		"mutate": DealWithMutate,
+		"grok": DealWithGrok,
 	},
 	"output": map[string]TranspileProcessor{},
 }
