@@ -132,6 +132,25 @@ func (sp SetProcessor) IngestProcessorType() string {
 	return "set"
 }
 
+type RemoveProcessor struct {
+	Field         string            `json:"field"`
+	IgnoreMissing bool              `json:"ignore_missing"`
+	Keep          *string           `json:"keep"`
+	Description   *string           `json:"description,omitempty"`
+	If            *string           `json:"if,omitempty"`
+	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
+	Tag           string            `json:"tag"`
+	OnFailure     []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ip RemoveProcessor) String() string {
+	return StringHelper(ip)
+}
+
+func (sp RemoveProcessor) IngestProcessorType() string {
+	return "remove"
+}
+
 type RenameProcessor struct {
 	Field         string            `json:"field"`
 	TargetField   string            `json:"target_field"`
@@ -263,7 +282,7 @@ type GsubProcessor struct {
 	Field         string            `json:"field,omitempty"`
 	Pattern       string            `json:"patterns,omitempty"`
 	Replacement   string            `json:"replacement"`
-	TargetField   *string           `json:"target_field"`
+	TargetField   *string           `json:"target_field,omitempty"`
 	IgnoreMissing bool              `json:"ignore_missing,omitempty"`
 	Description   *string           `json:"description,omitempty"`
 	If            *string           `json:"if,omitempty"`
@@ -286,6 +305,75 @@ func (ip GsubProcessor) MarshalJSON() ([]byte, error) {
 	return json.Marshal(
 		map[string]GsubProcessorAlias{
 			ip.IngestProcessorType(): (GsubProcessorAlias)(ip),
+		},
+	)
+}
+
+type JoinProcessor struct {
+	Field         string            `json:"field,omitempty"`
+	Separator     string            `json:"separator,omitempty"`
+	TargetField   *string           `json:"target_field,omitempty"`
+	IgnoreMissing bool              `json:"ignore_missing,omitempty"`
+	Description   *string           `json:"description,omitempty"`
+	If            *string           `json:"if,omitempty"`
+	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
+	Tag           string            `json:"tag"`
+	OnFailure     []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ap JoinProcessor) String() string {
+	return StringHelper(ap)
+}
+
+func (ap JoinProcessor) IngestProcessorType() string {
+	return "join"
+}
+
+func (ip JoinProcessor) MarshalJSON() ([]byte, error) {
+	type JoinProcessorAlias JoinProcessor
+
+	return json.Marshal(
+		map[string]JoinProcessorAlias{
+			ip.IngestProcessorType(): (JoinProcessorAlias)(ip),
+		},
+	)
+}
+
+type KVProcessor struct {
+	Field         string            `json:"field,omitempty"`
+	FieldSplit    string            `json:"field_split,omitempty"`
+	ValueSplit    string            `json:"value_split,omitempty"`
+	TargetField   *string           `json:"target_field,omitempty"`
+	IncludeKeys   []string          `json:"include_keys"`
+	ExcludeKeys   []string          `json:"exclude_keys,omitempty"`
+	IgnoreMissing bool              `json:"ignore_missing,omitempty"`
+	Prefix        *string           `json:"prefix,omitempty"`
+	TrimKey       *string           `json:"trim_key,omitempty"`
+	TrimValue     *string           `json:"trim_value,omitempty"`
+	StripBrackets bool              `json:"strip_bracket,omitempty"`
+	Pattern       string            `json:"patterns,omitempty"`
+	Replacement   string            `json:"replacement"`
+	Description   *string           `json:"description,omitempty"`
+	If            *string           `json:"if,omitempty"`
+	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
+	Tag           string            `json:"tag"`
+	OnFailure     []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ap KVProcessor) String() string {
+	return StringHelper(ap)
+}
+
+func (ap KVProcessor) IngestProcessorType() string {
+	return "kv"
+}
+
+func (ip KVProcessor) MarshalJSON() ([]byte, error) {
+	type KVProcessorAlias KVProcessor
+
+	return json.Marshal(
+		map[string]KVProcessorAlias{
+			ip.IngestProcessorType(): (KVProcessorAlias)(ip),
 		},
 	)
 }

@@ -285,21 +285,6 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
 		// It is a common field
-		case "add_field":
-			keys, values := getHashAttributeKeyValue(attr)
-
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-						If:          constraintTranspiled,
-						Value:       values[i],
-						Field:       keys[i],
-						OnFailure:   nil,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
-					})
-				counter += 1
-			}
 		case "id": // Do Nothing --> It is already extracted
 		case "rename":
 
@@ -381,29 +366,47 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				}
 			}
 
+		case "join":
+
+			keys, values := getHashAttributeKeyValue(attr)
+			for i := range keys {
+				ingestProcessors = append(ingestProcessors,
+					JoinProcessor{
+						Description:   getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
+						If:            constraintTranspiled,
+						Separator:     values[i],
+						Field:         keys[i],
+						IgnoreFailure: true, // Ignore Failure set to true, because Logstash does not require it to be an array
+						OnFailure:     nil,
+						Tag:           fmt.Sprintf("%s-%d", id, counter),
+					})
+				counter += 1
+			}
+		default:
+			log.Printf("Mutate of type '%s' not supported", plugin.Name())
+
 		}
+
 	}
 
 	return ingestProcessors
 }
 
-func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+func DealWithTagOnFailure(attr ast.Attribute, id string) []IngestProcessor {
+	return []IngestProcessor{AppendProcessor{
+		Tag:         fmt.Sprintf("append-tag-%s", id),
+		Description: getStringPointer("Append Tag on Failure"),
+		Field:       "tags",
+		Value:       getArrayStringAttributes(attr),
+	}}
+}
+
+var CommonAttributes = []string{"add_field", "remove_field", "add_tag", "id", "enable_metric", "periodic_flush", "remove_tag"}
+
+func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id string) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
-
-	id, err := plugin.ID()
-	if err != nil {
-		// Autogenerate plugin-id
-		id = plugin.Name() + "-" + randomString(2)
-	}
-
-	counter := 0 // Counter used to increment the tag
-
 	constraintTranspiled := transpileConstraint(constraint)
-
-	gp := GrokProcessor{
-		Tag: id,
-	}
-
+	counter := 0
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
 		// It is a common field
@@ -422,6 +425,66 @@ func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 					})
 				counter += 1
 			}
+		case "remove_field":
+			ingestProcessors = append(ingestProcessors,
+				RemoveProcessor{
+					Field: getStringAttributeString(attr),
+				},
+			)
+		case "add_tag":
+			ingestProcessors = append(ingestProcessors,
+				AppendProcessor{
+					Tag:   fmt.Sprintf("append-tag-%s", id),
+					Field: "tags",
+					Value: getArrayStringAttributes(attr),
+				},
+			)
+		case "id": // Already Added
+		case "enable_metric", "periodic_flush": // N/A
+
+		// case "remove_tag": // Not Supported
+		default:
+			log.Printf("Remove Tag is not yet supported")
+
+		}
+	}
+	return ingestProcessors
+
+}
+
+func Contains[T comparable](s []T, e T) bool {
+	for _, v := range s {
+		if v == e {
+			return true
+		}
+	}
+	return false
+}
+
+func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+	ingestProcessors := []IngestProcessor{}
+
+	id, err := plugin.ID()
+	if err != nil {
+		// Autogenerate plugin-id
+		id = plugin.Name() + "-" + randomString(2)
+	}
+
+	constraintTranspiled := transpileConstraint(constraint)
+
+	gp := GrokProcessor{
+		Tag: id,
+		If:  constraintTranspiled,
+	}
+
+	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
+
+	for _, attr := range plugin.Attributes {
+		if Contains(CommonAttributes, attr.Name()) {
+			continue
+		}
+		switch attr.Name() {
+		// It is a common field
 		case "match":
 			helpPattern := hashAttributeToMapArray(attr)
 			// TODO: Deal with multiple keys, currently only the last is used
@@ -434,19 +497,57 @@ func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 		case "pattern_definitions":
 			gp.PatternDefinitions = hashAttributeToMap(attr)
 		case "tag_on_failure":
-			gp.OnFailure = []IngestProcessor{AppendProcessor{
-				Tag:         fmt.Sprintf("append-tag-%s-%d", id, counter),
-				Description: getStringPointer("Append Tag on Failure"),
-				Field:       "tags",
-				Value:       getArrayStringAttributes(attr),
-			}}
-
+			gp.OnFailure = DealWithTagOnFailure(attr, id)
 		default:
 			log.Printf("Pattern '%s' is currently not supported", attr.Name())
 
 		}
 	}
 	ingestProcessors = append(ingestProcessors, gp)
+	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
+	return ingestProcessors
+}
+
+func DealWithKV(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+	ingestProcessors := []IngestProcessor{}
+
+	id, err := plugin.ID()
+	if err != nil {
+		// Autogenerate plugin-id
+		id = plugin.Name() + "-" + randomString(2)
+	}
+
+	constraintTranspiled := transpileConstraint(constraint)
+
+	kv := KVProcessor{
+		Tag:        id,
+		If:         constraintTranspiled,
+		FieldSplit: " ", // Default Value in Logstash
+	}
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		// It is a common field
+		case "tag_on_failure":
+			kv.OnFailure = DealWithTagOnFailure(attr, id)
+		case "target":
+			kv.TargetField = getStringPointer(getStringAttributeString(attr))
+		case "prefix":
+			kv.Prefix = getStringPointer(getStringAttributeString(attr))
+		case "field_split":
+			kv.FieldSplit = getStringAttributeString(attr) // TODO: De-Escape chars???
+		case "exclude_keys":
+			kv.ExcludeKeys = getArrayStringAttributes(attr)
+		case "include_keys":
+			kv.IncludeKeys = getArrayStringAttributes(attr)
+		case "include_brackets":
+			kv.StripBrackets = !getBoolValue(attr)
+		default:
+			log.Printf("Attribute '%s' is currently not supported", attr.Name())
+
+		}
+	}
+
 	return ingestProcessors
 }
 
@@ -466,6 +567,7 @@ var transpiler = map[string]map[string]TranspileProcessor{
 	"filter": {
 		"mutate": DealWithMutate,
 		"grok":   DealWithGrok,
+		"kv":     DealWithGrok,
 	},
 	"output": {},
 }
