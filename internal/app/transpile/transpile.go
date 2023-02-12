@@ -3,6 +3,7 @@ package transpile
 import (
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -136,6 +137,7 @@ func transpileRvalue(expr ast.Node) string {
 
 func transpileCondition(c ast.Condition) string {
 	var output string
+
 	for _, expr := range c.Expression {
 		// if i != 0 && i <= len(c.Expression)-1 {
 		// 	output += ") && ("
@@ -149,6 +151,9 @@ func transpileCondition(c ast.Condition) string {
 		case ast.NegativeConditionExpression:
 			operator_converted := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
 			output = output + "!" + operator_converted + "(" + transpileCondition(texpr.Condition) + ")"
+
+		case ast.NegativeSelectorExpression:
+			output = output + "!" + transpileRvalue(texpr.Selector)
 
 		case ast.InExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
@@ -166,10 +171,16 @@ func transpileCondition(c ast.Condition) string {
 
 		// case ast.RegexpExpression: TODO
 
-		// case ast.RvalueExpression: TODO
-
+		case ast.RvalueExpression:
+			bOpComparator := ""
+			if texpr.BoolExpression.BoolOperator().Op != ast.NoOperator {
+				bOpComparator = transpileBoolExpression(texpr.BoolExpression.BoolOperator())
+				output = output + bOpComparator + transpileRvalue(texpr.RValue)
+			} else {
+				output = output + transpileRvalue(texpr.RValue) + " != null"
+			}
 		default:
-			fmt.Println("Cannot convert %s", reflect.TypeOf(texpr))
+			log.Printf("Cannot convert %s %s", reflect.TypeOf(texpr), texpr)
 		}
 	}
 	return output
@@ -272,20 +283,26 @@ func randomString(length int) string {
 func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
 
-	id, err := plugin.ID()
-	if err != nil {
-		// Autogenerate plugin-id
-		id = plugin.Name() + "-" + randomString(2)
-	}
+	id := getProcessorID(plugin)
 
 	counter := 0 // Counter used to increment the tag
 
 	constraintTranspiled := transpileConstraint(constraint)
 
+	// Remove all Common Attributes
+	plugin_attributes := []ast.Attribute{}
+
 	for _, attr := range plugin.Attributes {
+		if !Contains(CommonAttributes, attr.Name()) {
+			plugin_attributes = append(plugin_attributes, attr)
+		}
+	}
+
+	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
+
+	for _, attr := range plugin_attributes {
 		switch attr.Name() {
 		// It is a common field
-		case "id": // Do Nothing --> It is already extracted
 		case "rename":
 
 			keys, values := getHashAttributeKeyValue(attr)
@@ -294,7 +311,7 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 					RenameProcessor{
 						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
 						If:          constraintTranspiled,
-						TargetField: values[i],
+						TargetField: toElasticPipelineSelector(values[i]),
 						Field:       keys[i],
 						OnFailure:   nil,
 						Tag:         fmt.Sprintf("%s-%d", id, counter),
@@ -383,11 +400,13 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				counter += 1
 			}
 		default:
-			log.Printf("Mutate of type '%s' not supported", plugin.Name())
+			log.Printf("Mutate of type '%s' not supported", attr.Name())
 
 		}
 
 	}
+
+	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
 
 	return ingestProcessors
 }
@@ -403,11 +422,25 @@ func DealWithTagOnFailure(attr ast.Attribute, id string) []IngestProcessor {
 
 var CommonAttributes = []string{"add_field", "remove_field", "add_tag", "id", "enable_metric", "periodic_flush", "remove_tag"}
 
+func toElasticPipelineSelectorExpression(s string) string {
+	newS := s
+	// Strings of type foo_%{[afield]}
+	field_finder := regexp.MustCompile(`\%\{([^\}]+)\}`)
+	for _, m := range field_finder.FindAll([]byte(s), -1) {
+		log.Println(toElasticPipelineSelector(string(m[2 : len(m)-1])))
+		newS = strings.Replace(newS, string(m), "{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}", 1)
+	}
+	return newS
+}
+
 func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id string) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
 	constraintTranspiled := transpileConstraint(constraint)
 	counter := 0
 	for _, attr := range plugin.Attributes {
+		if !Contains(CommonAttributes, attr.Name()) {
+			continue // Ignore not common attributes
+		}
 		switch attr.Name() {
 		// It is a common field
 		case "add_field":
@@ -418,7 +451,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 					SetProcessor{
 						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
 						If:          constraintTranspiled,
-						Value:       values[i],
+						Value:       toElasticPipelineSelectorExpression(values[i]),
 						Field:       keys[i],
 						OnFailure:   nil,
 						Tag:         fmt.Sprintf("%s-%d", id, counter),
@@ -444,7 +477,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 
 		// case "remove_tag": // Not Supported
 		default:
-			log.Printf("Remove Tag is not yet supported")
+			log.Printf("Remove Tag (%s) is not yet supported", attr.Name())
 
 		}
 	}
@@ -461,19 +494,24 @@ func Contains[T comparable](s []T, e T) bool {
 	return false
 }
 
-func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
-	ingestProcessors := []IngestProcessor{}
-
+func getProcessorID(plugin ast.Plugin) string {
 	id, err := plugin.ID()
 	if err != nil {
 		// Autogenerate plugin-id
 		id = plugin.Name() + "-" + randomString(2)
 	}
+	return id
+}
+
+func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+	ingestProcessors := []IngestProcessor{}
+
+	id := getProcessorID(plugin)
 
 	constraintTranspiled := transpileConstraint(constraint)
 
 	gp := GrokProcessor{
-		Tag: id,
+		Tag: getProcessorID(plugin),
 		If:  constraintTranspiled,
 	}
 
@@ -499,11 +537,17 @@ func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 		case "tag_on_failure":
 			gp.OnFailure = DealWithTagOnFailure(attr, id)
 		default:
-			log.Printf("Pattern '%s' is currently not supported", attr.Name())
+			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
 		}
 	}
+	// Add _grok_parse_failure
+	if len(gp.OnFailure) == 0 {
+		gp.OnFailure = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_grok_parse_failure", ast.DoubleQuoted)), id)
+	}
+
 	ingestProcessors = append(ingestProcessors, gp)
+	// TODO Add processors if on success and not always
 	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
 	return ingestProcessors
 }
@@ -511,18 +555,15 @@ func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 func DealWithKV(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
 
-	id, err := plugin.ID()
-	if err != nil {
-		// Autogenerate plugin-id
-		id = plugin.Name() + "-" + randomString(2)
-	}
+	id := getProcessorID(plugin)
 
 	constraintTranspiled := transpileConstraint(constraint)
 
 	kv := KVProcessor{
 		Tag:        id,
 		If:         constraintTranspiled,
-		FieldSplit: " ", // Default Value in Logstash
+		FieldSplit: " ",       // Default value in Logstash
+		Field:      "message", // Default value in Logstash
 	}
 
 	for _, attr := range plugin.Attributes {
@@ -542,11 +583,19 @@ func DealWithKV(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 			kv.IncludeKeys = getArrayStringAttributes(attr)
 		case "include_brackets":
 			kv.StripBrackets = !getBoolValue(attr)
+		case "source":
+			kv.Field = getStringAttributeString(attr)
 		default:
 			log.Printf("Attribute '%s' is currently not supported", attr.Name())
 
 		}
 	}
+	// Add _kv_filter_error
+	if len(kv.OnFailure) == 0 {
+		kv.OnFailure = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_kv_filter_error", ast.DoubleQuoted)), id)
+	}
+
+	ingestProcessors = append(ingestProcessors, kv)
 
 	return ingestProcessors
 }
@@ -558,7 +607,8 @@ func DealWithMissingTranspiler(plugin ast.Plugin, constraint Constraints) []Inge
 		constraintTranspiled = &tmp
 	}
 
-	log.Printf("[WARN] Plugin %s is not yet supported. Consider Making a contribution :)\nHere is the translated if-condition '%s'", plugin.Name(), *constraintTranspiled)
+	log.Printf("[WARN] Plugin %s is not yet supported. Consider Making a contribution :)\n", plugin.Name())
+
 	return []IngestProcessor{}
 }
 
@@ -567,7 +617,7 @@ var transpiler = map[string]map[string]TranspileProcessor{
 	"filter": {
 		"mutate": DealWithMutate,
 		"grok":   DealWithGrok,
-		"kv":     DealWithGrok,
+		"kv":     DealWithKV,
 	},
 	"output": {},
 }
@@ -599,7 +649,7 @@ func buildIngestPipeline(c ast.Config) {
 
 		f, ok := transpiler["filter"][c.Plugin().Name()]
 		if !ok {
-			fmt.Printf("There is no handler for the plugin %s\n", c.Plugin().Name())
+			log.Printf("There is no handler for the plugin %s\n", c.Plugin().Name())
 			f = DealWithMissingTranspiler
 		}
 		ip.Processors = append(ip.Processors, f(*c.Plugin(), constraint)...)

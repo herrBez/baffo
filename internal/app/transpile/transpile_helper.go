@@ -344,7 +344,7 @@ type KVProcessor struct {
 	FieldSplit    string            `json:"field_split,omitempty"`
 	ValueSplit    string            `json:"value_split,omitempty"`
 	TargetField   *string           `json:"target_field,omitempty"`
-	IncludeKeys   []string          `json:"include_keys"`
+	IncludeKeys   []string          `json:"include_keys,omitempty"`
 	ExcludeKeys   []string          `json:"exclude_keys,omitempty"`
 	IgnoreMissing bool              `json:"ignore_missing,omitempty"`
 	Prefix        *string           `json:"prefix,omitempty"`
@@ -352,7 +352,6 @@ type KVProcessor struct {
 	TrimValue     *string           `json:"trim_value,omitempty"`
 	StripBrackets bool              `json:"strip_bracket,omitempty"`
 	Pattern       string            `json:"patterns,omitempty"`
-	Replacement   string            `json:"replacement"`
 	Description   *string           `json:"description,omitempty"`
 	If            *string           `json:"if,omitempty"`
 	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
