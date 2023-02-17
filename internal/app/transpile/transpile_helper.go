@@ -496,3 +496,105 @@ func (ip DateProcessor) MarshalJSON() ([]byte, error) {
 		},
 	)
 }
+
+type DropProcessor struct {
+	Description   *string           `json:"description,omitempty"`
+	If            *string           `json:"if,omitempty"`
+	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
+	Tag           string            `json:"tag"`
+	OnFailure     []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ip DropProcessor) MarshalJSON() ([]byte, error) {
+	type DropProcessorAlias DropProcessor
+
+	return json.Marshal(
+		map[string]DropProcessorAlias{
+			ip.IngestProcessorType(): (DropProcessorAlias)(ip),
+		},
+	)
+}
+
+func (sp DropProcessor) String() string {
+	return StringHelper(sp)
+}
+
+func (sp DropProcessor) IngestProcessorType() string {
+	return "drop"
+}
+
+func (sp DropProcessor) SetIf(s *string) IngestProcessor {
+	sp.If = s
+	return sp
+}
+
+type SplitProcessor struct {
+	Field            string            `json:"field"`
+	Separator        string            `json:"separator` // Default value @timestamp
+	TargetField      *string           `json:"target_field,omitempty"`
+	IgnoreMissing    *bool             `json:"ignore_missing,omitempty"`
+	PreserveTrailing *bool             `json:"preserve_trailing,omitempty"`
+	Description      *string           `json:"description,omitempty"`
+	If               *string           `json:"if,omitempty"`
+	IgnoreFailure    bool              `json:"ignore_failure,omitempty"`
+	Tag              string            `json:"tag"`
+	OnFailure        []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ap SplitProcessor) String() string {
+	return StringHelper(ap)
+}
+
+func (ap SplitProcessor) IngestProcessorType() string {
+	return "split"
+}
+
+func (sp SplitProcessor) SetIf(s *string) IngestProcessor {
+	sp.If = s
+	return sp
+}
+
+func (ip SplitProcessor) MarshalJSON() ([]byte, error) {
+	type SplitProcessorAlias SplitProcessor
+
+	return json.Marshal(
+		map[string]SplitProcessorAlias{
+			ip.IngestProcessorType(): (SplitProcessorAlias)(ip),
+		},
+	)
+}
+
+type TrimProcessor struct {
+	Field            string            `json:"field"`
+	TargetField      *string           `json:"target_field,omitempty"`
+	IgnoreMissing    *bool             `json:"ignore_missing,omitempty"`
+	PreserveTrailing *bool             `json:"preserve_trailing,omitempty"`
+	Description      *string           `json:"description,omitempty"`
+	If               *string           `json:"if,omitempty"`
+	IgnoreFailure    bool              `json:"ignore_failure,omitempty"`
+	Tag              string            `json:"tag"`
+	OnFailure        []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ap TrimProcessor) String() string {
+	return StringHelper(ap)
+}
+
+func (ap TrimProcessor) IngestProcessorType() string {
+	return "trim"
+}
+
+func (sp TrimProcessor) SetIf(s *string) IngestProcessor {
+	sp.If = s
+	return sp
+}
+
+func (ip TrimProcessor) MarshalJSON() ([]byte, error) {
+	type TrimProcessorAlias TrimProcessor
+
+	return json.Marshal(
+		map[string]TrimProcessorAlias{
+			ip.IngestProcessorType(): (TrimProcessorAlias)(ip),
+		},
+	)
+}

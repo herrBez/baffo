@@ -1,43 +1,41 @@
-package transpile 
+package transpile
 
 import (
-ast "github.com/breml/logstash-config/ast"
-"log"
+	"log"
+
+	ast "github.com/breml/logstash-config/ast"
 )
 
 type CommonFilterAttributes struct {
-	AddField map[string]string
-	AddTag []string
-	EnableMetric bool
-	ID           string 
-	PeriodicFlush bool 
+	AddField      map[string]string
+	AddTag        []string
+	EnableMetric  bool
+	ID            string
+	PeriodicFlush bool
 	RemoveField   []string
-	RemoveTag []string
+	RemoveTag     []string
 }
-
 
 type GrokFilterPlugin struct {
-	BreakOnMatch bool 
-	ECSCompatibility string
-	KeepEmptyCaptures bool
-	Match map[string][]string // Single strings will be written in an array
-	NamedCapturesOnly bool
-	Overwrite bool 
-	PatternDefinitions map[string]string 
-	PatternsDir []string
-	PatternsFileGlob []string 
-	TagOnFailure []string 
-	TimeoutMillis int 
-	TimeoutScope string 
-	CommonAttributes CommonFilterAttributes
+	BreakOnMatch       bool
+	ECSCompatibility   string
+	KeepEmptyCaptures  bool
+	Match              map[string][]string // Single strings will be written in an array
+	NamedCapturesOnly  bool
+	Overwrite          bool
+	PatternDefinitions map[string]string
+	PatternsDir        []string
+	PatternsFileGlob   []string
+	TagOnFailure       []string
+	TimeoutMillis      int
+	TimeoutScope       string
+	CommonAttributes   CommonFilterAttributes
 }
-
 
 func getStringPointer(s string) *string {
-	t := s 
+	t := s
 	return &t
 }
-
 
 func hashAttributeToMapArray(attr ast.Attribute) map[string][]string {
 	m := map[string][]string{}
@@ -46,16 +44,21 @@ func hashAttributeToMapArray(attr ast.Attribute) map[string][]string {
 		for _, entry := range tattr.Entries {
 			var keyString string
 			var values []string
-			
+
 			switch tKey := entry.Key.(type) {
-			case ast.StringAttribute: keyString = tKey.Value()
-			default: log.Panicf("Expecting a string for the keys")
+			case ast.StringAttribute:
+				keyString = tKey.Value()
+			default:
+				log.Panicf("Expecting a string for the keys")
 			}
 
 			switch tValue := entry.Value.(type) {
-			case ast.StringAttribute: values = []string{getStringAttributeString(tValue)}
-			case ast.ArrayAttribute: values = getArrayStringAttributes(tValue)
-			default: log.Panicf("Expecting a string")
+			case ast.StringAttribute:
+				values = []string{getStringAttributeString(tValue)}
+			case ast.ArrayAttribute:
+				values = getArrayStringAttributes(tValue)
+			default:
+				log.Panicf("Expecting a string")
 			}
 
 			m[keyString] = values
@@ -64,13 +67,12 @@ func hashAttributeToMapArray(attr ast.Attribute) map[string][]string {
 	return m
 }
 
-
 func getBoolValue(attr ast.Attribute) bool {
 	rawString := getStringAttributeString(attr)
 	if rawString == "true" {
-		return true 
+		return true
 	} else if rawString == "false" {
-		return false 
+		return false
 	}
 	log.Panicf("Unexpected")
 	return false
@@ -87,17 +89,22 @@ func NewCommonFilterAttributes(plugin ast.Plugin) CommonFilterAttributes {
 		ID: id,
 	}
 
-
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
 		case "id": // Do nothing already dealt with
-		case "add_field": cfa.AddField = hashAttributeToMap(attr)
-		case "remove_field": cfa.RemoveField = getArrayStringAttributes(attr)
-		case "add_tags": cfa.AddTag = getArrayStringAttributes(attr)
-		case "remove_tags": cfa.RemoveTag = getArrayStringAttributes(attr)
-		case "enable_metrics": cfa.EnableMetric = getBoolValue(attr)
-		case "periodic_flush": cfa.PeriodicFlush = getBoolValue(attr)
-
+		case "add_field":
+			cfa.AddField = hashAttributeToMap(attr)
+		case "remove_field":
+			cfa.RemoveField = getArrayStringAttributes(attr)
+		case "add_tags":
+			cfa.AddTag = getArrayStringAttributes(attr)
+		case "remove_tags":
+			cfa.RemoveTag = getArrayStringAttributes(attr)
+		case "enable_metrics":
+			cfa.EnableMetric = getBoolValue(attr)
+		case "periodic_flush":
+			cfa.PeriodicFlush = getBoolValue(attr)
+			// Ignore all other attributes
 		}
 	}
 	return cfa
@@ -108,10 +115,11 @@ func NewGrok(plugin ast.Plugin) {
 	gfp := GrokFilterPlugin{
 		ECSCompatibility: "v8",
 		CommonAttributes: NewCommonFilterAttributes(plugin),
+		TagOnFailure:     []string{"_grok_parse_failure"},
 	}
 
 	for _, attr := range plugin.Attributes {
-		
+
 		switch attr.Name() {
 		// It is a common field
 		case "match":
@@ -121,8 +129,9 @@ func NewGrok(plugin ast.Plugin) {
 		case "pattern_definitions":
 			gfp.PatternDefinitions = hashAttributeToMap(attr)
 		case "tag_on_failure":
+			// Overwrite Tag on Failure if needed
 			gfp.TagOnFailure = getArrayStringAttributes(attr)
-			
+
 		}
 	}
 }
