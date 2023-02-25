@@ -81,14 +81,14 @@ func ApplyPluginsOrBranch(root []ast.BranchOrPlugin, applyPluginsFunc ApplyPlugi
 
 			applyConditionFunc(&block.IfBlock.Condition)
 
-			block.IfBlock.Block = ApplyPlugins(block.IfBlock.Block, applyPluginsFunc)
+			block.IfBlock.Block = ApplyPluginsOrBranch(block.IfBlock.Block, applyPluginsFunc, applyConditionFunc)
 
 			for i := range block.ElseIfBlock {
 				applyConditionFunc(&block.ElseIfBlock[i].Condition)
-				block.ElseIfBlock[i].Block = ApplyPlugins(block.ElseIfBlock[i].Block, applyPluginsFunc)
+				block.ElseIfBlock[i].Block = ApplyPluginsOrBranch(block.ElseIfBlock[i].Block, applyPluginsFunc, applyConditionFunc)
 			}
 
-			block.ElseBlock.Block = ApplyPlugins(block.ElseBlock.Block, applyPluginsFunc)
+			block.ElseBlock.Block = ApplyPluginsOrBranch(block.ElseBlock.Block, applyPluginsFunc, applyConditionFunc)
 
 			c.parent[c.iter.index] = block
 
