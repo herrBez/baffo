@@ -112,10 +112,10 @@ func (f ECSCheck) Run(args []string) error {
 type GetFieldsEnvs func(ast.Node) ([]string, []string)
 
 
-func pairWiseAppendUnique(tf []string, te []string, n ast.Node, fs GetFieldsEnvs) {
+func pairWiseAppendUnique(tf * []string, te * []string, n ast.Node, fs GetFieldsEnvs) {
 	tmpFields, tmpEnvs := fs(n)
-	tf = appendUnique(tf, tmpFields...)
-	te = appendUnique(te, tmpEnvs...)
+	*tf = appendUnique(*tf, tmpFields...)
+	*te = appendUnique(*te, tmpEnvs...)
 }
 
 
@@ -124,47 +124,54 @@ func collectConditionFields(n ast.Node) ([] string, []string) {
 	var fields [] string;
 	var envs [] string;
 
+	log.Warn().Msgf("TYPOF%s: %s", n, reflect.TypeOf(n))
+
 	switch node := n.(type) {
+
+
 
 	case ast.Condition:
 		for _, expression := range node.Expression {
-			pairWiseAppendUnique(fields, envs, expression, collectConditionFields)
-			// fields = appendUnique(fields, collectConditionFields(expression)...)
+			pairWiseAppendUnique(&fields, &envs, expression, collectConditionFields)
+			// &fields = appendUnique(&fields, collectConditionFields(expression)...)
 		}
 
 	case ast.ConditionExpression:
-		pairWiseAppendUnique(fields, envs, node.Condition, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.Condition, collectConditionFields)
 
 	case ast.NegativeConditionExpression:
-		pairWiseAppendUnique(fields, envs, node.Condition, collectConditionFields)
-		// fields = appendUnique(fields, collectConditionFields(node.Condition)...)
+		pairWiseAppendUnique(&fields, &envs, node.Condition, collectConditionFields)
+		// &fields = appendUnique(&fields, collectConditionFields(node.Condition)...)
 
 	case ast.NegativeSelectorExpression:
-		pairWiseAppendUnique(fields, envs, node.Selector, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.Selector, collectConditionFields)
 
 	case ast.InExpression:
-		pairWiseAppendUnique(fields, envs, node.LValue, collectConditionFields)
-		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.LValue, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.RValue, collectConditionFields)
 
 	case ast.NotInExpression:
-		pairWiseAppendUnique(fields, envs, node.LValue, collectConditionFields)
-		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.LValue, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.RValue, collectConditionFields)
 
 	case ast.RvalueExpression:
-		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.RValue, collectConditionFields)
 
 	case ast.CompareExpression:
-		pairWiseAppendUnique(fields, envs, node.LValue, collectConditionFields)
-		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
-		// node.CompareOperator cannot cannot contain fields nor envs
-		// pairWiseAppendUnique(fields, envs, node.CompareOperator, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.LValue, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.RValue, collectConditionFields)
+		// node.CompareOperator cannot cannot contain &fields nor &envs
+		// pairWiseAppendUnique(&fields, &envs, node.CompareOperator, collectConditionFields)
 
 
 	case ast.RegexpExpression:
-		pairWiseAppendUnique(fields, envs, node.LValue, collectConditionFields)
-		pairWiseAppendUnique(fields, envs, node.RValue, collectConditionFields)
-		// node.RegexpOperator cannot contain fields nor envs
-		// pairWiseAppendUnique(fields, envs, node.RegexpOperator, collectConditionFields)
+		log.Warn().Msgf("Regexp %s", node)
+		pairWiseAppendUnique(&fields, &envs, node.LValue, collectConditionFields)
+		pairWiseAppendUnique(&fields, &envs, node.RValue, collectConditionFields)
+
+
+		// node.RegexpOperator cannot contain &fields nor &envs
+		// pairWiseAppendUnique(&fields, &envs, node.RegexpOperator, collectConditionFields)
 
 	case ast.Selector:
 		fields = appendUnique(fields, node.String())
@@ -180,7 +187,7 @@ func collectConditionFields(n ast.Node) ([] string, []string) {
 
 	case ast.ArrayAttribute:
 		for _, attr := range node.Attributes {
-			pairWiseAppendUnique(fields, envs, attr, collectConditionFields)
+			pairWiseAppendUnique(&fields, &envs, attr, collectConditionFields)
 		}
 	default:
 		log.Panic().Msgf("Unknown type `%s`", reflect.TypeOf(node))
@@ -327,7 +334,10 @@ func getAllFieldNamesUsedInPluginSection(plugin_section []ast.PluginSection, sec
 		}
 
 		// Add static information on fields added by ecs_compatibility
-		val, ok := ecsCDF.Input[plugin.Name()][ecs_compatibility_value]
+
+
+
+		val, ok := ecsCDF.getSectionMap(section)[plugin.Name()][ecs_compatibility_value]
 		if ok {
 			pluginPsStats.AddFieldsAddedByThePlugin(val...)
 		} else {
@@ -376,7 +386,7 @@ func getAllFieldNamesUsedInPluginSection(plugin_section []ast.PluginSection, sec
 				log.Printf("Warning: field %s contain dots and does not using Logstash's Field Selector convention")
 			}
 		}
-		fmt.Println(plugin.Pos())
+		// fmt.Println(plugin.Pos())
 		fmt.Println(pluginPsStats)
 
 		psStats.merge(pluginPsStats)

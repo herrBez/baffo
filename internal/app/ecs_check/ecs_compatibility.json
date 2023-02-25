@@ -86,6 +86,24 @@
             ]
         }
     },
-    "filter": {},
-    "output": {}
+    "filter": {
+        "date": {
+            "disabled": [],
+            "v8": []
+        },
+        "mutate": {
+            "disabled": [],
+            "v8": []
+        },
+        "aggregate": {
+            "disabled": [],
+            "v8": []
+        }
+    },
+    "output": {
+        "pipeline": {
+            "disabled": [],
+            "v8": []
+        }
+    }
 }

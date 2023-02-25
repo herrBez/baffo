@@ -5,6 +5,7 @@ import (
 	"strings"
 	"fmt"
 	"bytes"
+	"encoding/json"
 	// "regexp"
 	// "reflect"
 	"github.com/rs/zerolog/log"
@@ -27,22 +28,22 @@ type ConfigStats struct {
 	Output PluginSectionStats
 	PipelineOutput []string // List of Output Pipelines
 	PipelineAddress string // List of Input Pipelines
-	Filename string // Filename
+	Filename string  // Filename
 }
 
 type PluginSectionStats struct {
-	PluginNames []string // Name of the Plugin
+	PluginNames []string `json:"plugin_names"` // Name of the Plugin
 
-	FieldsAddedByThePlugin []string // Fields added by the plugin
+	FieldsAddedByThePlugin []string `json:"fields_added"` // Fields added by the plugin
 
-	FieldsUsedByThePlugin [] string // Fields used in the Plugin Definition
-	PluginEnvs [] string // Env variables used in the Plugin Definition
+	FieldsUsedByThePlugin [] string `json:"fields_used"` // Fields used in the Plugin Definition
+	PluginEnvs [] string `json:"plugin_envs"` // Env variables used in the Plugin Definition
 
-	ConditionFields [] string // Fields used in the Branch Conditions
-	ConditionEnvs [] string // Env variables used in the Branch Condition
+	ConditionFields [] string `json:"condition_fields"` // Fields used in the Branch Conditions
+	ConditionEnvs [] string `json:"condition_envs"` // Env variables used in the Branch Condition
 
-	Fields []string // Cumulative Fields
-	Envs []string // Cumulative Env Variables
+	Fields []string `json:"fields"` // Cumulative Fields
+	Envs []string `json:"envs"` // Cumulative Env Variables
 }
 
 func NewConfigStats() ConfigStats {
@@ -69,58 +70,87 @@ func (cs ConfigStats) GlobalStats() PluginSectionStats {
 
 
 func (c ConfigStats) String() string {
-	var s bytes.Buffer
+	// var s bytes.Buffer
 
-	s.WriteString("===INPUT===\n")
-	s.WriteString(c.Input.String())
-	s.WriteString("\n===\n")
-	s.WriteString("===FILTER===\n")
-	s.WriteString(c.Filter.String())
-	s.WriteString("\n===\n")
-	s.WriteString("\n===OUTPUT===\n")
-	s.WriteString(c.Output.String())
-	s.WriteString("\n===\n")
-	s.WriteString("\n===CUMULATIVE===\n")
-	s.WriteString(c.GlobalStats().String())
-	s.WriteString("\n===\n")
+	// s.WriteString("===INPUT===\n")
+	// s.WriteString(c.Input.String())
+	// s.WriteString("\n===\n")
+	// s.WriteString("===FILTER===\n")
+	// s.WriteString(c.Filter.String())
+	// s.WriteString("\n===\n")
+	// s.WriteString("\n===OUTPUT===\n")
+	// s.WriteString(c.Output.String())
+	// s.WriteString("\n===\n")
+	// s.WriteString("\n===CUMULATIVE===\n")
+	// s.WriteString(c.GlobalStats().String())
+	// s.WriteString("\n===\n")
 
-	return s.String()
+	ps := NewPluginSectionStats()
+	ps.merge(c.Input)
+	ps.merge(c.Filter)
+	ps.merge(c.Output)
+	return ps.String()
+
+
+	// val, err := json.Marshal(c)
+
+	// if err != nil {
+	// 	log.Error().Msgf("Error marshaling")
+	// 	return "<ERROR>"
+	// }
+
+	// return string(val)
 }
 
 func NewPluginSectionStats() PluginSectionStats {
 	return PluginSectionStats {
+		PluginNames: []string{},
+		FieldsAddedByThePlugin: []string{},
+		FieldsUsedByThePlugin: []string{},
+		PluginEnvs: []string{},
+		ConditionFields: []string{},
+		ConditionEnvs: []string{},
+		Fields: []string{},
+		Envs: []string{},
 	}
 }
 
 func (ps PluginSectionStats) String() string {
-	var s bytes.Buffer
+	// var s bytes.Buffer
 
-	s.WriteString("[Plugin Names     ]:")
-	fmt.Fprintf(&s, "%s", ps.PluginNames)
-	s.WriteString("\n")
-	s.WriteString("[Fields Added     ]")
-	fmt.Fprintf(&s, "%s", ps.FieldsAddedByThePlugin)
-	s.WriteString("\n")
-	s.WriteString("[Fields Used      ]:")
-	fmt.Fprintf(&s, "%s", ps.FieldsUsedByThePlugin)
-	s.WriteString("\n")
-	s.WriteString("[Plugin Envs      ]:")
-	fmt.Fprintf(&s, "%s", ps.PluginEnvs)
-	s.WriteString("\n")
-	s.WriteString("[Condition Fields ]:")
-	fmt.Fprintf(&s, "%s", ps.ConditionFields)
-	s.WriteString("\n")
-	s.WriteString("[Condition Envs   ]:")
-	fmt.Fprintf(&s, "%s", ps.ConditionEnvs)
-	s.WriteString("\n")
-	s.WriteString("[Cumulative Fields]:")
-	fmt.Fprintf(&s, "%s", ps.Fields)
-	s.WriteString("\n")
-	s.WriteString("[Cumulative Envs  ]:")
-	fmt.Fprintf(&s, "%s", ps.Envs)
-	// s.WriteString(ps.Envs)
+	// s.WriteString("[Plugin Names     ]:")
+	// fmt.Fprintf(&s, "%s", ps.PluginNames)
+	// s.WriteString("\n")
+	// s.WriteString("[Fields Added     ]")
+	// fmt.Fprintf(&s, "%s", ps.FieldsAddedByThePlugin)
+	// s.WriteString("\n")
+	// s.WriteString("[Fields Used      ]:")
+	// fmt.Fprintf(&s, "%s", ps.FieldsUsedByThePlugin)
+	// s.WriteString("\n")
+	// s.WriteString("[Plugin Envs      ]:")
+	// fmt.Fprintf(&s, "%s", ps.PluginEnvs)
+	// s.WriteString("\n")
+	// s.WriteString("[Condition Fields ]:")
+	// fmt.Fprintf(&s, "%s", ps.ConditionFields)
+	// s.WriteString("\n")
+	// s.WriteString("[Condition Envs   ]:")
+	// fmt.Fprintf(&s, "%s", ps.ConditionEnvs)
+	// s.WriteString("\n")
+	// s.WriteString("[Cumulative Fields]:")
+	// fmt.Fprintf(&s, "%s", ps.Fields)
+	// s.WriteString("\n")
+	// s.WriteString("[Cumulative Envs  ]:")
+	// fmt.Fprintf(&s, "%s", ps.Envs)
+	// // s.WriteString(ps.Envs)
 
-	return s.String()
+	val, err := json.Marshal(ps)
+
+	if err != nil {
+		log.Error().Msgf("Error marshaling")
+		return "<ERROR>"
+	}
+
+	return string(val)
 }
 
 
@@ -216,6 +246,17 @@ type ECSCompatibilityDefinedFields struct {
 	Input map[string]map[string][]string `json:"input"`
 	Filter map[string]map[string][]string  `json:"filter"`
 	Output map[string]map[string][]string `json:"output"`
+}
+
+func (ecdf ECSCompatibilityDefinedFields) getSectionMap(section string) map[string]map[string][]string {
+	switch section {
+	case "input": return ecdf.Input
+	case "filter": return ecdf.Filter
+	case "output": return ecdf.Output
+	default: log.Panic().Msgf("Unknown section `%s`. Only input, filter, output are supported", section)
+	}
+	return ecdf.Input
+
 }
 
 // type AddedPluginField struct{
