@@ -230,10 +230,6 @@ func getHashAttributeKeyValue(attr ast.Attribute) ([]string, []string) {
 			default:
 				log.Panic("Unexpected key of type not string")
 			}
-
-			// raw_keys = append(raw_keys, entry.Key)
-
-			// raw_values = append(raw_values, entry.Value)
 		}
 
 	default: // Unexpected Case --> PANIC
@@ -307,8 +303,6 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 
 	id := getProcessorID(plugin)
 
-	counter := 0 // Counter used to increment the tag
-
 	constraintTranspiled := transpileConstraint(constraint)
 
 	onFailureProcessors := []IngestProcessor{}
@@ -329,10 +323,7 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
 
 	if len(onSuccessProcessors) > 0 {
-		onFailureProcessors = append(onFailureProcessors, SetProcessor{
-			Field: getUniqueOnFailureAddField(id),
-			Value: "N/A",
-		})
+		onFailureProcessors = append(onFailureProcessors, getTranspilerOnFailureProcessor(id))
 	}
 
 	for _, attr := range plugin.Attributes {
@@ -342,7 +333,6 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 		if attr.Name() == "tag_on_failure" {
 			continue
 		}
-
 		switch attr.Name() {
 
 		// It is a common field
@@ -354,30 +344,23 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				ingestProcessors = append(ingestProcessors,
 					RenameProcessor{
 						Description: getStringPointer(fmt.Sprintf("Rename field '%s' to '%s'", keys[i], targetField)),
-						If:          constraintTranspiled,
 						TargetField: targetField,
 						Field:       keys[i],
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 		case "copy":
 			keys, values := getHashAttributeKeyValue(attr)
 
-			constraintTranspiled := transpileConstraint(constraint)
 			for i := range keys {
 
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
 						Description: getStringPointer(fmt.Sprintf("Copy value of field '%s' in field '%s'", keys[i], values[i])),
-						If:          constraintTranspiled,
 						CopyFrom:    keys[i],
 						Field:       values[i],
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 		case "uppercase", "lowercase":
 			// Assuming only the field
@@ -389,13 +372,10 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 						CaseProcessor{
 							Type:        attr.Name(), // either uppercase or lowercase
 							Description: getStringPointer(fmt.Sprintf("'%s' field '%s'", attr.Name(), field)),
-							If:          transpileConstraint(constraint),
 							Field:       getStringAttributeString(el),
-							OnFailure:   onFailureProcessors,
-							Tag:         fmt.Sprintf("%s-%d", id, counter),
+							Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 						})
 				}
-				counter += 1
 
 			default: // uppercase/lowercase require an Array
 				log.Printf("Mutate filter attribute '%s' not supported", attr.Name())
@@ -416,15 +396,12 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 					ingestProcessors = append(ingestProcessors,
 						GsubProcessor{
 							Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-							If:          transpileConstraint(constraint),
 							Field:       gsubexpression[i],
 							Pattern:     gsubexpression[i+1],
 							Replacement: gsubexpression[i+2],
-							OnFailure:   onFailureProcessors,
-							Tag:         fmt.Sprintf("%s-%d", id, counter),
+							Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 						})
 				}
-				counter += 1
 			}
 
 		case "join":
@@ -434,14 +411,11 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				ingestProcessors = append(ingestProcessors,
 					JoinProcessor{
 						Description:   getStringPointer(fmt.Sprintf("Join array '%s' with separator '%s", keys[i], values[i])),
-						If:            constraintTranspiled,
 						Separator:     values[i],
 						Field:         keys[i],
 						IgnoreFailure: false,
-						OnFailure:     onFailureProcessors,
-						Tag:           fmt.Sprintf("%s-%d", id, counter),
+						Tag:           fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 		case "split":
 			keys, values := getHashAttributeKeyValue(attr)
@@ -449,13 +423,10 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				ingestProcessors = append(ingestProcessors,
 					SplitProcessor{
 						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-						If:          constraintTranspiled,
 						Separator:   values[i],
 						Field:       keys[i],
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 
 		case "strip":
@@ -464,36 +435,33 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				ingestProcessors = append(ingestProcessors,
 					TrimProcessor{
 						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-						If:          constraintTranspiled,
-						Field:       field,
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Field:       toElasticPipelineSelector(field),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					},
 				)
+
 			}
 
 		case "coerce":
 			keys, values := getHashAttributeKeyValue(attr)
 
-			newCondition := ""
+			// newCondition := ""
 
 			for i := range keys {
 				field_is_null := getIfFieldIsDefinedAndEqualsValue(keys[i], nil)
-				if constraintTranspiled == nil {
-					newCondition = field_is_null
-				} else {
-					newCondition = field_is_null + " && (" + *constraintTranspiled + ")"
-				}
+				// if constraintTranspiled == nil {
+				// 	newCondition = field_is_null
+				// } else {
+				// 	newCondition = field_is_null + " && (" + *constraintTranspiled + ")"
+				// }
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
 						Description: getStringPointer(fmt.Sprintf("Set field '%s' to value '%s' if null", keys[i], values[i])),
-						If:          getStringPointer(newCondition),
+						If:          getStringPointer(field_is_null),
 						Value:       values[i],
 						Field:       keys[i],
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 
 		case "replace":
@@ -502,14 +470,11 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
 						Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
-						If:          constraintTranspiled,
 						Value:       values[i],
 						Field:       keys[i],
 						Override:    true,
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 
 		case "update":
@@ -518,19 +483,37 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
 						Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
-						If:          constraintTranspiled,
 						Value:       values[i],
 						Field:       keys[i],
 						Override:    true,
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 
 		default:
 			log.Printf("Mutate of type '%s' not supported", attr.Name())
 
+		}
+	}
+
+	// Heuristic: when the mutate is composed by more than 3 processors, let us create a new Pipeline
+	if len(ingestProcessors) > 3 {
+		ingestProcessors = []IngestProcessor{
+			PipelineProcessor{
+				Pipeline: IngestPipeline{
+					Name:                id,
+					Processors:          ingestProcessors,
+					OnFailureProcessors: onFailureProcessors,
+				},
+				Name: id,
+				If:   constraintTranspiled,
+			},
+		}
+	} else {
+		// Otherwise add OnFailureProcessor to Each processor
+		for i := range ingestProcessors {
+			ingestProcessors[i] = ingestProcessors[i].SetOnFailure(onFailureProcessors)
+			ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled)
 		}
 	}
 
@@ -570,10 +553,6 @@ func toElasticPipelineSelectorExpression(s string) string {
 	return newS
 }
 
-func getUniqueOnFailureTag(id string) string {
-	return "_transpile_error" + id
-}
-
 func getUniqueOnFailureAddField(id string) string {
 	return "_TRANSPILER." + id
 }
@@ -581,7 +560,7 @@ func getUniqueOnFailureAddField(id string) string {
 func getTranspilerOnFailureProcessor(id string) IngestProcessor {
 	return SetProcessor{
 		Field: getUniqueOnFailureAddField(id),
-		Value: "N/A",
+		Value: "Processor {{ _ingest.on_failure_processor_type }} with tag {{ _ingest.on_failure_processor_tag }} in pipeline {{ _ingest.on_failure_pipeline }} failed with message {{ _ingest.on_failure_message }}",
 		Tag:   getUniqueOnFailureAddField(id),
 	}
 }
@@ -635,7 +614,6 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 
 	ifString := getStringPointer(getIfFieldUnDefined(getUniqueOnFailureAddField(id)) + rhs)
 
-	counter := 0
 	for _, attr := range plugin.Attributes {
 		if !Contains(CommonAttributes, attr.Name()) {
 			continue // Ignore not common attributes
@@ -646,36 +624,36 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 			keys, values := getHashAttributeKeyValue(attr)
 
 			for i := range keys {
+
+				value := toElasticPipelineSelectorExpression(values[i])
+
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
-						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
+						Description: getStringPointer(fmt.Sprintf("On Success of %s, add field '%s' with value '%s'", id, keys[i], value)),
 						If:          ifString,
-						Value:       toElasticPipelineSelectorExpression(values[i]),
+						Value:       value,
 						Field:       keys[i],
 						OnFailure:   nil,
-						Tag:         fmt.Sprintf("%s-%d-onSucc", id, counter),
+						Tag:         fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 		case "remove_field":
 			ingestProcessors = append(ingestProcessors,
 				RemoveProcessor{
 					Field: getStringAttributeString(attr),
 					If:    ifString,
-					Tag:   fmt.Sprintf("%s-%d-onSucc", id, counter),
+					Tag:   fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 				},
 			)
-			counter += 1
 		case "add_tag":
 			ingestProcessors = append(ingestProcessors,
 				AppendProcessor{
-					Tag:   fmt.Sprintf("%s-%d-onSucc", id, counter),
+					Tag:   fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 					Field: "tags",
 					Value: getArrayStringAttributes(attr),
 					If:    ifString,
 				},
 			)
-			counter += 1
 		case "id": // Already Added
 		case "enable_metric", "periodic_flush": // N/A
 
@@ -690,7 +668,6 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 }
 
 func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string, onSuccessProcessors []IngestProcessor, ingestProcessors []IngestProcessor) []IngestProcessor {
-	counter := 0 // Counter used to increment the tag
 
 	onFailureProcessors := []IngestProcessor{}
 
@@ -701,23 +678,20 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 		}
 	}
 
+	// Add default value for Tag_on_failure
 	if len(onFailureProcessors) == 0 {
 		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_mutate_error", ast.DoubleQuoted)), id)
 	}
 
 	// On Success Processors should be executed only when no Failure happened
 	if len(onSuccessProcessors) > 0 {
-		onFailureProcessors = append(onFailureProcessors, SetProcessor{
-			Field: getUniqueOnFailureAddField(id),
-			Value: "N/A",
-		})
+		onFailureProcessors = append(onFailureProcessors, getTranspilerOnFailureProcessor(id))
 	}
 
 	for _, attr := range plugin.Attributes {
 		if attr.Name() == "tag_on_failure" {
 			continue
 		}
-
 		switch attr.Name() {
 		case "rename":
 
@@ -731,9 +705,8 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 						TargetField: targetField,
 						Field:       keys[i],
 						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 		case "copy":
 			keys, values := getHashAttributeKeyValue(attr)
@@ -748,9 +721,8 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 						CopyFrom:  keys[i],
 						Field:     values[i],
 						OnFailure: onFailureProcessors,
-						Tag:       fmt.Sprintf("%s-%d", id, counter),
+						Tag:       fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 		case "uppercase", "lowercase":
 			// Assuming only the field
@@ -765,10 +737,9 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 							TargetField: getStringAttributeString(el),
 							Field:       getStringAttributeString(el),
 							OnFailure:   onFailureProcessors,
-							Tag:         fmt.Sprintf("%s-%d", id, counter),
+							Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 						})
 				}
-				counter += 1
 
 			default: // uppercase/lowercase require an Array
 				log.Printf("Mutate filter attribute '%s' not supported", attr.Name())
@@ -794,10 +765,10 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 							Pattern:     gsubexpression[i+1],
 							Replacement: gsubexpression[i+2],
 							OnFailure:   onFailureProcessors,
-							Tag:         fmt.Sprintf("%s-%d", id, counter),
+							Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 						})
 				}
-				counter += 1
+
 			}
 
 		case "join":
@@ -812,9 +783,8 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 						Field:         keys[i],
 						IgnoreFailure: false,
 						OnFailure:     onFailureProcessors,
-						Tag:           fmt.Sprintf("%s-%d", id, counter),
+						Tag:           fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 		case "split":
 			keys, values := getHashAttributeKeyValue(attr)
@@ -826,9 +796,8 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 						Separator:   values[i],
 						Field:       keys[i],
 						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 
 		case "trim":
@@ -838,9 +807,9 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 					TrimProcessor{
 						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
 						If:          constraintTranspiled,
-						Field:       field,
+						Field:       toElasticPipelineSelector(field),
 						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					},
 				)
 			}
@@ -864,9 +833,8 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 						Value:       values[i],
 						Field:       keys[i],
 						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 
 		case "replace":
@@ -880,9 +848,8 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 						Field:       keys[i],
 						Override:    true,
 						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 
 		case "update":
@@ -896,9 +863,8 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 						Field:       keys[i],
 						Override:    true,
 						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, counter),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
-				counter += 1
 			}
 
 		default:
@@ -919,7 +885,7 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 	return ingestProcessors
 }
 
-func DealWithPlugin(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+func DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
 	constraintTranspiled := transpileConstraint(constraint)
 
@@ -937,7 +903,7 @@ func DealWithPlugin(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 
 	pa := ast.NewPlugin(plugin.Name(), noncommonattrs...)
 
-	ingestProcessors = transpilerV2["filter"][plugin.Name()](pa, constraintTranspiled, id, onSuccessProcessors, ingestProcessors)
+	ingestProcessors = transpilerV2[section][plugin.Name()](pa, constraintTranspiled, id, onSuccessProcessors, ingestProcessors)
 
 	return ingestProcessors
 }
@@ -1236,6 +1202,7 @@ func transpileConstraint(constraint Constraints) *string {
 func buildIngestPipeline(c ast.Config) {
 	plugin_names := []string{}
 	ip := IngestPipeline{
+		Name:                "main-pipeline",
 		Description:         "",
 		Processors:          []IngestProcessor{},
 		OnFailureProcessors: nil,
@@ -1258,6 +1225,30 @@ func buildIngestPipeline(c ast.Config) {
 		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc)
 	}
 
-	fmt.Printf("%s", ip)
+	ips := getAllIngestPipeline(ip)
 
+	fmt.Printf("{")
+	for i, pipeline := range ips {
+		fmt.Printf("\"%s\": %s ", pipeline.Name, pipeline)
+		if i < len(ips)-1 {
+			fmt.Printf(",")
+		}
+	}
+	fmt.Printf("}")
+
+}
+
+func getAllIngestPipeline(main IngestPipeline) []IngestPipeline {
+	ingestPipelines := []IngestPipeline{main}
+
+	processors := main.Processors
+	processors = append(processors, main.OnFailureProcessors...)
+
+	for _, ip := range processors {
+		switch typedIp := ip.(type) {
+		case PipelineProcessor:
+			ingestPipelines = append(ingestPipelines, getAllIngestPipeline(typedIp.Pipeline)...)
+		}
+	}
+	return ingestPipelines
 }

@@ -3,6 +3,7 @@ package transpile
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 
 	ast "github.com/breml/logstash-config/ast"
@@ -36,6 +37,7 @@ func AddCondToConstraint(c Constraints, otherwise bool, cond ast.Condition) Cons
 }
 
 type IngestPipeline struct {
+	Name                string            `json:"-"`
 	Description         string            `json:"description"`
 	Processors          []IngestProcessor `json:"processors"`
 	OnFailureProcessors []IngestProcessor `json:"on_failure"`
@@ -75,6 +77,18 @@ func MyJsonEncoder(m map[string]interface{}) string {
 	return string(buf.Bytes())
 }
 
+func AppendIf(origIf *string, newIf *string) *string {
+	var resIf *string = nil
+	if origIf == nil {
+		resIf = newIf
+	} else if newIf == nil {
+		resIf = origIf
+	} else {
+		resIf = getStringPointer(fmt.Sprintf("(%s) && (%s)", *origIf, *newIf))
+	}
+	return resIf
+}
+
 func (ingestPipeline IngestPipeline) String() string {
 
 	m := map[string]interface{}{
@@ -91,6 +105,7 @@ type IngestProcessor interface {
 	String() string
 	IngestProcessorType() string
 	SetIf(s *string) IngestProcessor
+	SetOnFailure(s []IngestProcessor) IngestProcessor
 	// SetTag(string)
 }
 
@@ -134,7 +149,12 @@ func (sp SetProcessor) IngestProcessorType() string {
 }
 
 func (sp SetProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp SetProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -162,6 +182,11 @@ func (sp RemoveProcessor) SetIf(s *string) IngestProcessor {
 	return sp
 }
 
+func (sp RemoveProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
+
 type RenameProcessor struct {
 	Field         string            `json:"field"`
 	TargetField   string            `json:"target_field"`
@@ -182,7 +207,12 @@ func (sp RenameProcessor) IngestProcessorType() string {
 }
 
 func (sp RenameProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp RenameProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -222,7 +252,12 @@ func (sp CaseProcessor) ToOutputMap() map[string]interface{} {
 }
 
 func (sp CaseProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp CaseProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -260,7 +295,12 @@ func (gp GrokProcessor) IngestProcessorType() string {
 }
 
 func (sp GrokProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp GrokProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -305,13 +345,18 @@ func (ip AppendProcessor) MarshalJSON() ([]byte, error) {
 }
 
 func (sp AppendProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp AppendProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
 type GsubProcessor struct {
 	Field         string            `json:"field,omitempty"`
-	Pattern       string            `json:"patterns,omitempty"`
+	Pattern       string            `json:"pattern,omitempty"`
 	Replacement   string            `json:"replacement"`
 	TargetField   *string           `json:"target_field,omitempty"`
 	IgnoreMissing bool              `json:"ignore_missing,omitempty"`
@@ -331,7 +376,12 @@ func (ap GsubProcessor) IngestProcessorType() string {
 }
 
 func (sp GsubProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp GsubProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -366,7 +416,12 @@ func (ap JoinProcessor) IngestProcessorType() string {
 }
 
 func (sp JoinProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp JoinProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -409,7 +464,12 @@ func (ap KVProcessor) IngestProcessorType() string {
 }
 
 func (sp KVProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp KVProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -444,7 +504,12 @@ func (ap DissectProcessor) IngestProcessorType() string {
 }
 
 func (sp DissectProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp DissectProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -487,6 +552,11 @@ func (sp DateProcessor) SetIf(s *string) IngestProcessor {
 	return sp
 }
 
+func (sp DateProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
+
 func (ip DateProcessor) MarshalJSON() ([]byte, error) {
 	type DateProcessorAlias DateProcessor
 
@@ -524,13 +594,18 @@ func (sp DropProcessor) IngestProcessorType() string {
 }
 
 func (sp DropProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp DropProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
 type SplitProcessor struct {
 	Field            string            `json:"field"`
-	Separator        string            `json:"separator` // Default value @timestamp
+	Separator        string            `json:"separator"`
 	TargetField      *string           `json:"target_field,omitempty"`
 	IgnoreMissing    *bool             `json:"ignore_missing,omitempty"`
 	PreserveTrailing *bool             `json:"preserve_trailing,omitempty"`
@@ -550,7 +625,12 @@ func (ap SplitProcessor) IngestProcessorType() string {
 }
 
 func (sp SplitProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp SplitProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -585,7 +665,12 @@ func (ap TrimProcessor) IngestProcessorType() string {
 }
 
 func (sp TrimProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp TrimProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
@@ -595,6 +680,45 @@ func (ip TrimProcessor) MarshalJSON() ([]byte, error) {
 	return json.Marshal(
 		map[string]TrimProcessorAlias{
 			ip.IngestProcessorType(): (TrimProcessorAlias)(ip),
+		},
+	)
+}
+
+type PipelineProcessor struct {
+	Pipeline              IngestPipeline    `json:"-"`
+	Name                  string            `json:"name"`
+	IgnoreMissingPipeline *bool             `json:"ignore_missing_pipeline,omitempty"`
+	Description           *string           `json:"description,omitempty"`
+	If                    *string           `json:"if,omitempty"`
+	IgnoreFailure         bool              `json:"ignore_failure,omitempty"`
+	Tag                   *string           `json:"tag,omitempty"`
+	OnFailure             []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ap PipelineProcessor) String() string {
+	return StringHelper(ap)
+}
+
+func (ap PipelineProcessor) IngestProcessorType() string {
+	return "pipeline"
+}
+
+func (sp PipelineProcessor) SetIf(s *string) IngestProcessor {
+	sp.If = AppendIf(sp.If, s)
+	return sp
+}
+
+func (sp PipelineProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
+
+func (ip PipelineProcessor) MarshalJSON() ([]byte, error) {
+	type PipelineProcessorAlias PipelineProcessor
+
+	return json.Marshal(
+		map[string]PipelineProcessorAlias{
+			ip.IngestProcessorType(): (PipelineProcessorAlias)(ip),
 		},
 	)
 }
