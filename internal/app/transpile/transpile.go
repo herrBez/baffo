@@ -307,7 +307,6 @@ func DealWithMutateAttributes(attr ast.Attribute, ingestProcessors []IngestProce
 		for _, value := range values {
 			field := toElasticPipelineSelector(value)
 			ingestProcessors = append(ingestProcessors, ScriptProcessor{
-				// TODO
 				Source: getStringPointer(
 					fmt.Sprintf(
 						`if(ctx.%s instanceof String) {
@@ -321,7 +320,22 @@ else {
 }*/`, field, field, field, field, field, field, field)),
 				Description: getStringPointer(fmt.Sprintf("Capitalize field '%s'", field)),
 				Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				If:          getStringPointer(fmt.Sprintf("%s", getIfFieldDefined(field))),
+				If:          getStringPointer(getIfFieldDefined(field)),
+			})
+		}
+
+	case "convert":
+		keys, values := getHashAttributeKeyValue(attr)
+
+		for i := range keys {
+			if Contains([]string{"boolean", "integer_eu", "float_eu"}, values[i]) {
+				log.Warn().Msgf("Mutate Convert to type '%s' semantics may be different in Elasticsearch Convert Processor", values[i])
+			}
+			ingestProcessors = append(ingestProcessors, ConvertProcessor{
+				Description: getStringPointer(fmt.Sprintf("Convert field '%s' to '%s'", keys[i], values[i])),
+				Field:       keys[i],
+				Type:        LogstashConvertToConvertProcessorType[values[i]],
+				Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 			})
 		}
 

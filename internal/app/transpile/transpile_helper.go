@@ -826,3 +826,58 @@ func (ip ScriptProcessor) MarshalJSON() ([]byte, error) {
 		},
 	)
 }
+
+// Convert Processors Type: integer, long, float, double, string, boolean, ip, and auto
+// Convert Logstash Type: integer, integer_eu, float, float_eu, string, boolean
+var LogstashConvertToConvertProcessorType = map[string]string{
+	"integer":    "integer",
+	"integer_eu": "integer",
+	"float":      "float",
+	"float_eu":   "float_eu",
+	"string":     "string",
+	"boolean":    "boolean",
+}
+
+type ConvertProcessor struct {
+	Field         string            `json:"field"`
+	TargetField   *string           `json:"target_field,omitempty"`
+	Type          string            `json:"type"`
+	IgnoreMissing *bool             `json:"ignore_missing,omitempty"`
+	Description   *string           `json:"description,omitempty"`
+	If            *string           `json:"if,omitempty"`
+	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
+	Tag           string            `json:"tag"`
+	OnFailure     []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (sp ConvertProcessor) String() string {
+	return StringHelper(sp)
+}
+
+func (sp ConvertProcessor) IngestProcessorType() string {
+	return "convert"
+}
+
+func (sp ConvertProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
+	return sp
+}
+
+func (sp ConvertProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
+
+func (ip ConvertProcessor) MarshalJSON() ([]byte, error) {
+	type ConvertProcessorAlias ConvertProcessor
+
+	return json.Marshal(
+		map[string]ConvertProcessorAlias{
+			ip.IngestProcessorType(): (ConvertProcessorAlias)(ip),
+		},
+	)
+}
