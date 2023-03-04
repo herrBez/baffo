@@ -105,7 +105,7 @@ func (ingestPipeline IngestPipeline) String() string {
 type IngestProcessor interface {
 	String() string
 	IngestProcessorType() string
-	SetIf(s *string) IngestProcessor
+	SetIf(s *string, append bool) IngestProcessor
 	SetOnFailure(s []IngestProcessor) IngestProcessor
 	// SetTag(string)
 }
@@ -149,8 +149,12 @@ func (sp SetProcessor) IngestProcessorType() string {
 	return "set"
 }
 
-func (sp SetProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp SetProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -178,8 +182,12 @@ func (sp RemoveProcessor) IngestProcessorType() string {
 	return "remove"
 }
 
-func (sp RemoveProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+func (sp RemoveProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -207,8 +215,12 @@ func (sp RenameProcessor) IngestProcessorType() string {
 	return "rename"
 }
 
-func (sp RenameProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp RenameProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -252,13 +264,17 @@ func (sp CaseProcessor) ToOutputMap() map[string]interface{} {
 	return map[string]interface{}{}
 }
 
-func (sp CaseProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp CaseProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
-func (sp CaseProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
-	sp.OnFailure = s
+func (sp CaseProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -295,13 +311,17 @@ func (gp GrokProcessor) IngestProcessorType() string {
 	return "grok"
 }
 
-func (sp GrokProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp GrokProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
-func (sp GrokProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
-	sp.OnFailure = s
+func (sp GrokProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -335,6 +355,15 @@ func (ap AppendProcessor) IngestProcessorType() string {
 	return "append"
 }
 
+func (sp AppendProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
+	return sp
+}
+
 func (ip AppendProcessor) MarshalJSON() ([]byte, error) {
 	type AppendProcessorAlias AppendProcessor
 
@@ -343,11 +372,6 @@ func (ip AppendProcessor) MarshalJSON() ([]byte, error) {
 			ip.IngestProcessorType(): (AppendProcessorAlias)(ip),
 		},
 	)
-}
-
-func (sp AppendProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
-	return sp
 }
 
 func (sp AppendProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
@@ -376,13 +400,17 @@ func (ap GsubProcessor) IngestProcessorType() string {
 	return "gsub"
 }
 
-func (sp GsubProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp GsubProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
-func (sp GsubProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
-	sp.OnFailure = s
+func (sp GsubProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -416,13 +444,17 @@ func (ap JoinProcessor) IngestProcessorType() string {
 	return "join"
 }
 
-func (sp JoinProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp JoinProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
 	return sp
 }
 
-func (sp JoinProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
-	sp.OnFailure = s
+func (sp JoinProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -464,8 +496,12 @@ func (ap KVProcessor) IngestProcessorType() string {
 	return "kv"
 }
 
-func (sp KVProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp KVProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -504,8 +540,12 @@ func (ap DissectProcessor) IngestProcessorType() string {
 	return "dissect"
 }
 
-func (sp DissectProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp DissectProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -548,8 +588,12 @@ func (ap DateProcessor) IngestProcessorType() string {
 	return "dissect"
 }
 
-func (sp DateProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = s
+func (sp DateProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -594,8 +638,12 @@ func (sp DropProcessor) IngestProcessorType() string {
 	return "drop"
 }
 
-func (sp DropProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp DropProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -625,8 +673,12 @@ func (ap SplitProcessor) IngestProcessorType() string {
 	return "split"
 }
 
-func (sp SplitProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp SplitProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -665,8 +717,12 @@ func (ap TrimProcessor) IngestProcessorType() string {
 	return "trim"
 }
 
-func (sp TrimProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp TrimProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -703,9 +759,12 @@ func (ap PipelineProcessor) String() string {
 func (ap PipelineProcessor) IngestProcessorType() string {
 	return "pipeline"
 }
-
-func (sp PipelineProcessor) SetIf(s *string) IngestProcessor {
-	sp.If = AppendIf(sp.If, s)
+func (sp PipelineProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
 	return sp
 }
 
@@ -720,6 +779,50 @@ func (ip PipelineProcessor) MarshalJSON() ([]byte, error) {
 	return json.Marshal(
 		map[string]PipelineProcessorAlias{
 			ip.IngestProcessorType(): (PipelineProcessorAlias)(ip),
+		},
+	)
+}
+
+type ScriptProcessor struct {
+	Lang          *string                 `json:"lang,omitempty"`
+	Id            *string                 `json:"id,omitempty"`
+	Source        *string                 `json:"source,omitempty"`
+	Params        *map[string]interface{} `json:"params,omitempty"`
+	Description   *string                 `json:"description,omitempty"`
+	If            *string                 `json:"if,omitempty"`
+	IgnoreFailure bool                    `json:"ignore_failure,omitempty"`
+	Tag           string                  `json:"tag"`
+	OnFailure     []IngestProcessor       `json:"on_failure,omitempty"`
+}
+
+func (ap ScriptProcessor) String() string {
+	return StringHelper(ap)
+}
+
+func (ap ScriptProcessor) IngestProcessorType() string {
+	return "script"
+}
+
+func (sp ScriptProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
+	return sp
+}
+
+func (sp ScriptProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
+
+func (ip ScriptProcessor) MarshalJSON() ([]byte, error) {
+	type ScriptProcessorAlias ScriptProcessor
+
+	return json.Marshal(
+		map[string]ScriptProcessorAlias{
+			ip.IngestProcessorType(): (ScriptProcessorAlias)(ip),
 		},
 	)
 }
