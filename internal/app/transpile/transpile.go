@@ -411,7 +411,7 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 			for i := range keys {
 				ingestProcessors = append(ingestProcessors,
 					JoinProcessor{
-						Description:   getStringPointer(fmt.Sprintf("Join array '%s' with separator '%s", keys[i], values[i])),
+						Description:   getStringPointer(fmt.Sprintf("Join array '%s' with separator '%s'", keys[i], values[i])),
 						Separator:     values[i],
 						Field:         keys[i],
 						IgnoreFailure: false,
@@ -497,8 +497,8 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 		}
 	}
 
-	// Heuristic: when the mutate is composed by more than 3 processors, let us create a new Pipeline
-	if len(ingestProcessors) > 3 {
+	// To keep a similar semantics
+	if len(ingestProcessors) > 1 {
 		ingestProcessors = []IngestProcessor{
 			PipelineProcessor{
 				Pipeline: IngestPipeline{
@@ -511,10 +511,11 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 			},
 		}
 	} else {
+		log.Info().Msg("Here")
 		// Otherwise add OnFailureProcessor to Each processor
 		for i := range ingestProcessors {
 			ingestProcessors[i] = ingestProcessors[i].SetOnFailure(onFailureProcessors)
-			ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled)
+			ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled, true)
 		}
 	}
 
@@ -524,7 +525,7 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 	// In this case we are always in the "OnSuccess" case, thus we can simplify the condition
 	if len(ingestProcessors) == 0 { // There are only unsupported or the common attributes
 		for i := range onSuccessProcessors {
-			onSuccessProcessors[i] = onSuccessProcessors[i].SetIf(constraintTranspiled)
+			onSuccessProcessors[i] = onSuccessProcessors[i].SetIf(constraintTranspiled, false)
 		}
 	}
 
@@ -581,13 +582,10 @@ func getIfFieldUnDefined(field string) string {
 }
 
 func getIfFieldIsDefinedAndEqualsValue(field string, val *string) string {
-
 	splittedField := strings.Split(field, ".")
 	newFieldButLastMaybe := "ctx"
-	newFieldButLast := "ctx"
 
 	for _, sf := range splittedField[:len(splittedField)-1] {
-		newFieldButLast = newFieldButLast + "." + sf
 		newFieldButLastMaybe = newFieldButLastMaybe + "?." + sf
 	}
 
@@ -694,6 +692,7 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 			continue
 		}
 		switch attr.Name() {
+
 		case "rename":
 
 			keys, values := getHashAttributeKeyValue(attr)
@@ -878,7 +877,7 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 	// In this case we are always in the "OnSuccess" case, thus we can simplify the condition
 	if len(ingestProcessors) == 0 { // There are only unsupported or the common attributes
 		for i := range onSuccessProcessors {
-			onSuccessProcessors[i] = onSuccessProcessors[i].SetIf(constraintTranspiled)
+			onSuccessProcessors[i] = onSuccessProcessors[i].SetIf(constraintTranspiled, false)
 		}
 	}
 
