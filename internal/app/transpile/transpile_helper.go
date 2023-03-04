@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+
+	"github.com/rs/zerolog/log"
 
 	ast "github.com/breml/logstash-config/ast"
 )
@@ -72,7 +73,7 @@ func MyJsonEncoder(m map[string]interface{}) string {
 
 	if err != nil {
 		// Panic
-		log.Panicf("Something wrong in marshalling")
+		log.Panic().Msg("Something wrong in marshalling")
 	}
 	return string(buf.Bytes())
 }

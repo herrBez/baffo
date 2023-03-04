@@ -1,11 +1,13 @@
 package transpile
 
 import (
-	"log"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"go.elastic.co/ecszerolog"
 
 	// "strings"
 	"fmt"
@@ -30,6 +32,8 @@ func New() Transpile {
 }
 
 func (f Transpile) Run(args []string) error {
+	logger := ecszerolog.New(os.Stderr)
+	log.Logger = logger
 	var result *multierror.Error
 
 	for _, filename := range args {
@@ -44,10 +48,7 @@ func (f Transpile) Run(args []string) error {
 		res, err1 := config.ParseFile(filename, config.IgnoreComments(true))
 
 		if err1 != nil {
-			log.Println(err1)
-
-			log.Println(res)
-			log.Println(reflect.TypeOf(res))
+			log.Warn().Msgf("%s %s %s", err1, res, reflect.TypeOf(res))
 
 			// if errMsg, hasErr := config.GetFarthestFailure(); hasErr {
 			// 	if !strings.Contains(err.Error(), errMsg) {
@@ -220,7 +221,7 @@ func getHashAttributeKeyValue(attr ast.Attribute) ([]string, []string) {
 			case ast.StringAttribute:
 				keys = append(keys, toElasticPipelineSelector(tKey.Value()))
 			default:
-				log.Panic("Unexpected key of type not string")
+				log.Panic().Msg("Unexpected key of type not string")
 			}
 
 			switch tValue := entry.Value.(type) {
@@ -228,12 +229,12 @@ func getHashAttributeKeyValue(attr ast.Attribute) ([]string, []string) {
 				values = append(values, tValue.Value())
 
 			default:
-				log.Panic("Unexpected key of type not string")
+				log.Panic().Msg("Unexpected key of type not string")
 			}
 		}
 
 	default: // Unexpected Case --> PANIC
-		log.Panicf("Unexpected Case")
+		log.Panic().Msg("Unexpected Case")
 	}
 	return keys, values
 }
@@ -243,7 +244,7 @@ func getStringAttributeString(attr ast.Attribute) string {
 	case ast.StringAttribute:
 		return tattr.Value()
 	default:
-		log.Panic("Not expected")
+		log.Panic().Msg("Not expected")
 	}
 	return ""
 }
@@ -257,7 +258,7 @@ func getArrayStringAttributes(attr ast.Attribute) []string {
 		}
 
 	default:
-		log.Panicf("I will only an array of strings")
+		log.Panic().Msg("I will only an array of strings")
 	}
 	return values
 }
@@ -274,14 +275,14 @@ func hashAttributeToMap(attr ast.Attribute) map[string]string {
 			case ast.StringAttribute:
 				keyString = tKey.Value()
 			default:
-				log.Panicf("Expecting a string for the keys")
+				log.Panic().Msg("Expecting a string for the keys")
 			}
 
 			switch tValue := entry.Value.(type) {
 			case ast.StringAttribute:
 				valueString = tValue.Value()
 			default:
-				log.Panicf("Expecting a string")
+				log.Panic().Msg("Expecting a string")
 			}
 
 			m[keyString] = valueString
@@ -547,7 +548,7 @@ func toElasticPipelineSelectorExpression(s string) string {
 	// Strings of type foo_%{[afield]}
 	field_finder := regexp.MustCompile(`\%\{([^\}]+)\}`)
 	for _, m := range field_finder.FindAll([]byte(s), -1) {
-		log.Println(toElasticPipelineSelector(string(m[2 : len(m)-1])))
+		log.Info().Msg(toElasticPipelineSelector(string(m[2 : len(m)-1])))
 		newS = strings.Replace(newS, string(m), "{{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}}", 1)
 	}
 	return newS
