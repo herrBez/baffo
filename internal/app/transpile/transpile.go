@@ -598,7 +598,7 @@ func getIfFieldIsDefinedAndEqualsValue(field string, val *string) string {
 		valString = fmt.Sprintf("\"%s\"", *val)
 	}
 
-	return fmt.Sprintf("!%s.containsKey('%s') && ctx.%s == %s", newFieldButLastMaybe, splittedField[len(splittedField)-1], field, valString)
+	return fmt.Sprintf("%s.containsKey('%s') && ctx.%s == %s", newFieldButLastMaybe, splittedField[len(splittedField)-1], field, valString)
 }
 
 func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id string) []IngestProcessor {
@@ -829,7 +829,7 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 				}
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("Set field '%s' to value '%s' if null", keys[i], values[i])),
+						Description: getStringPointer(fmt.Sprintf("Set field '%s' to value '%s' if null (coerce)", keys[i], values[i])),
 						If:          getStringPointer(newCondition),
 						Value:       values[i],
 						Field:       keys[i],
