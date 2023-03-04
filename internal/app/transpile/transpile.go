@@ -299,6 +299,197 @@ func randomString(length int) string {
 	return fmt.Sprintf("%x", b)[2 : length+2]
 }
 
+func DealWithMutateAttributes(attr ast.Attribute, ingestProcessors []IngestProcessor, id string) []IngestProcessor {
+	switch attr.Name() {
+
+	case "capitalize":
+		values := getArrayStringAttributes(attr)
+		for _, value := range values {
+			field := toElasticPipelineSelector(value)
+			ingestProcessors = append(ingestProcessors, ScriptProcessor{
+				// TODO
+				Source: getStringPointer(
+					fmt.Sprintf(
+						`if(ctx.%s instanceof String) {
+	ctx.%s = ctx.%s.substring(0, 1).toUpperCase() + ctx.%s.substring(1);
+} else if(ctx.%s instanceof List) {
+	ctx.%s = ctx.%s.stream().map(x -> x.substring(0, 1).toUpperCase() + x.substring(1)).collect(Collectors.toList());
+}
+/* Commented out, uncomment if you need to fail on erroneous type
+else {
+  throw new Exception("Cannot capitalize something that is not a string")
+}*/`, field, field, field, field, field, field, field)),
+				Description: getStringPointer(fmt.Sprintf("Capitalize field '%s'", field)),
+				Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				If:          getStringPointer(fmt.Sprintf("%s", getIfFieldDefined(field))),
+			})
+		}
+
+	// It is a common field
+	case "rename":
+
+		keys, values := getHashAttributeKeyValue(attr)
+		for i := range keys {
+			targetField := toElasticPipelineSelector(values[i])
+			ingestProcessors = append(ingestProcessors,
+				RenameProcessor{
+					Description: getStringPointer(fmt.Sprintf("Rename field '%s' to '%s'", keys[i], targetField)),
+					TargetField: targetField,
+					Field:       keys[i],
+					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				})
+		}
+	case "copy":
+		keys, values := getHashAttributeKeyValue(attr)
+
+		for i := range keys {
+
+			ingestProcessors = append(ingestProcessors,
+				SetProcessor{
+					Description: getStringPointer(fmt.Sprintf("Copy value of field '%s' in field '%s'", keys[i], values[i])),
+					CopyFrom:    keys[i],
+					Field:       values[i],
+					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				})
+		}
+	case "uppercase", "lowercase":
+		// Assuming only the field
+		switch tAttributes := attr.(type) {
+		case ast.ArrayAttribute:
+			for _, el := range tAttributes.Attributes {
+				field := getStringAttributeString(el)
+				ingestProcessors = append(ingestProcessors,
+					CaseProcessor{
+						Type:        attr.Name(), // either uppercase or lowercase
+						Description: getStringPointer(fmt.Sprintf("'%s' field '%s'", attr.Name(), field)),
+						Field:       getStringAttributeString(el),
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+					})
+			}
+
+		default: // uppercase/lowercase require an Array
+			log.Printf("Mutate filter attribute '%s' not supported", attr.Name())
+		}
+
+	case "gsub":
+		// Assuming only the field
+		switch tAttributes := attr.(type) {
+		case ast.ArrayAttribute:
+
+			gsubexpression := getArrayStringAttributes(tAttributes)
+
+			if len(gsubexpression)%3 != 0 {
+				log.Printf("Gsub expects triplets of (field, pattern, replacement), while %d params are given", len(gsubexpression))
+			}
+
+			for i := 0; i < len(gsubexpression); i += 3 {
+				ingestProcessors = append(ingestProcessors,
+					GsubProcessor{
+						Description: getStringPointer(fmt.Sprintf("Field '%s': substitute '%s' with '%s'", gsubexpression[i], gsubexpression[i+1], gsubexpression[i+2])),
+						Field:       gsubexpression[i],
+						Pattern:     gsubexpression[i+1],
+						Replacement: gsubexpression[i+2],
+						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+					})
+			}
+		}
+
+	case "join":
+
+		keys, values := getHashAttributeKeyValue(attr)
+		for i := range keys {
+			ingestProcessors = append(ingestProcessors,
+				JoinProcessor{
+					Description:   getStringPointer(fmt.Sprintf("Join array '%s' with separator '%s'", keys[i], values[i])),
+					Separator:     values[i],
+					Field:         keys[i],
+					IgnoreFailure: false,
+					Tag:           fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				})
+		}
+	case "split":
+		keys, values := getHashAttributeKeyValue(attr)
+		for i := range keys {
+			ingestProcessors = append(ingestProcessors,
+				SplitProcessor{
+					Description: getStringPointer(fmt.Sprintf("Split field '%s' with separator '%s'", keys[i], values[i])),
+					Separator:   values[i],
+					Field:       keys[i],
+					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				})
+		}
+
+	case "strip":
+		to_trim_fields := getArrayStringAttributes(attr)
+		for _, field := range to_trim_fields {
+
+			elasticField := toElasticPipelineSelector(field)
+
+			ingestProcessors = append(ingestProcessors,
+				TrimProcessor{
+					Description: getStringPointer(fmt.Sprintf("Trim field '%s'", elasticField)),
+					Field:       elasticField,
+					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				},
+			)
+
+		}
+
+	case "coerce":
+		keys, values := getHashAttributeKeyValue(attr)
+
+		// newCondition := ""
+
+		for i := range keys {
+			field_is_null := getIfFieldIsDefinedAndEqualsValue(keys[i], nil)
+			// if constraintTranspiled == nil {
+			// 	newCondition = field_is_null
+			// } else {
+			// 	newCondition = field_is_null + " && (" + *constraintTranspiled + ")"
+			// }
+			ingestProcessors = append(ingestProcessors,
+				SetProcessor{
+					Description: getStringPointer(fmt.Sprintf("Set field '%s' to value '%s' if null", keys[i], values[i])),
+					If:          getStringPointer(field_is_null),
+					Value:       values[i],
+					Field:       keys[i],
+					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				})
+		}
+
+	case "replace":
+		keys, values := getHashAttributeKeyValue(attr)
+		for i := range keys {
+			ingestProcessors = append(ingestProcessors,
+				SetProcessor{
+					Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
+					Value:       values[i],
+					Field:       keys[i],
+					Override:    true,
+					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				})
+		}
+
+	case "update":
+		keys, values := getHashAttributeKeyValue(attr)
+		for i := range keys {
+			ingestProcessors = append(ingestProcessors,
+				SetProcessor{
+					Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
+					Value:       values[i],
+					Field:       keys[i],
+					Override:    true,
+					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
+				})
+		}
+
+	default:
+		log.Printf("Mutate of type '%s' not supported", attr.Name())
+
+	}
+	return ingestProcessors
+}
+
 func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
 
@@ -334,167 +525,9 @@ func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor
 		if attr.Name() == "tag_on_failure" {
 			continue
 		}
-		switch attr.Name() {
 
-		// It is a common field
-		case "rename":
+		ingestProcessors = DealWithMutateAttributes(attr, ingestProcessors, id)
 
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				targetField := toElasticPipelineSelector(values[i])
-				ingestProcessors = append(ingestProcessors,
-					RenameProcessor{
-						Description: getStringPointer(fmt.Sprintf("Rename field '%s' to '%s'", keys[i], targetField)),
-						TargetField: targetField,
-						Field:       keys[i],
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-		case "copy":
-			keys, values := getHashAttributeKeyValue(attr)
-
-			for i := range keys {
-
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("Copy value of field '%s' in field '%s'", keys[i], values[i])),
-						CopyFrom:    keys[i],
-						Field:       values[i],
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-		case "uppercase", "lowercase":
-			// Assuming only the field
-			switch tAttributes := attr.(type) {
-			case ast.ArrayAttribute:
-				for _, el := range tAttributes.Attributes {
-					field := getStringAttributeString(el)
-					ingestProcessors = append(ingestProcessors,
-						CaseProcessor{
-							Type:        attr.Name(), // either uppercase or lowercase
-							Description: getStringPointer(fmt.Sprintf("'%s' field '%s'", attr.Name(), field)),
-							Field:       getStringAttributeString(el),
-							Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-						})
-				}
-
-			default: // uppercase/lowercase require an Array
-				log.Printf("Mutate filter attribute '%s' not supported", attr.Name())
-			}
-
-		case "gsub":
-			// Assuming only the field
-			switch tAttributes := attr.(type) {
-			case ast.ArrayAttribute:
-
-				gsubexpression := getArrayStringAttributes(tAttributes)
-
-				if len(gsubexpression)%3 != 0 {
-					log.Printf("Gsub expects triplets of (field, pattern, replacement), while %d params are given", len(gsubexpression))
-				}
-
-				for i := 0; i < len(gsubexpression); i += 3 {
-					ingestProcessors = append(ingestProcessors,
-						GsubProcessor{
-							Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-							Field:       gsubexpression[i],
-							Pattern:     gsubexpression[i+1],
-							Replacement: gsubexpression[i+2],
-							Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-						})
-				}
-			}
-
-		case "join":
-
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					JoinProcessor{
-						Description:   getStringPointer(fmt.Sprintf("Join array '%s' with separator '%s'", keys[i], values[i])),
-						Separator:     values[i],
-						Field:         keys[i],
-						IgnoreFailure: false,
-						Tag:           fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-		case "split":
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					SplitProcessor{
-						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-						Separator:   values[i],
-						Field:       keys[i],
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-
-		case "strip":
-			to_trim_fields := getArrayStringAttributes(attr)
-			for _, field := range to_trim_fields {
-				ingestProcessors = append(ingestProcessors,
-					TrimProcessor{
-						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-						Field:       toElasticPipelineSelector(field),
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					},
-				)
-
-			}
-
-		case "coerce":
-			keys, values := getHashAttributeKeyValue(attr)
-
-			// newCondition := ""
-
-			for i := range keys {
-				field_is_null := getIfFieldIsDefinedAndEqualsValue(keys[i], nil)
-				// if constraintTranspiled == nil {
-				// 	newCondition = field_is_null
-				// } else {
-				// 	newCondition = field_is_null + " && (" + *constraintTranspiled + ")"
-				// }
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("Set field '%s' to value '%s' if null", keys[i], values[i])),
-						If:          getStringPointer(field_is_null),
-						Value:       values[i],
-						Field:       keys[i],
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-
-		case "replace":
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
-						Value:       values[i],
-						Field:       keys[i],
-						Override:    true,
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-
-		case "update":
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
-						Value:       values[i],
-						Field:       keys[i],
-						Override:    true,
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-
-		default:
-			log.Printf("Mutate of type '%s' not supported", attr.Name())
-
-		}
 	}
 
 	// To keep a similar semantics
@@ -567,7 +600,7 @@ func getTranspilerOnFailureProcessor(id string) IngestProcessor {
 	}
 }
 
-func getIfFieldUnDefined(field string) string {
+func getIfFieldDefined(field string) string {
 	// newField := strings.Replace(field, ".", "?.", strings.Count(field, ".")-1)
 	splittedField := strings.Split(field, ".")
 	newFieldButLastMaybe := "ctx"
@@ -578,7 +611,7 @@ func getIfFieldUnDefined(field string) string {
 		newFieldButLastMaybe = newFieldButLastMaybe + "?." + sf
 	}
 
-	return fmt.Sprintf("!%s.containsKey('%s')", newFieldButLastMaybe, splittedField[len(splittedField)-1])
+	return fmt.Sprintf("%s.containsKey('%s')", newFieldButLastMaybe, splittedField[len(splittedField)-1])
 }
 
 func getIfFieldIsDefinedAndEqualsValue(field string, val *string) string {
@@ -611,7 +644,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 		rhs = " && (" + *constraintTranspiled + ")"
 	}
 
-	ifString := getStringPointer(getIfFieldUnDefined(getUniqueOnFailureAddField(id)) + rhs)
+	ifString := getStringPointer(fmt.Sprintf("!%s%s", getIfFieldDefined(getUniqueOnFailureAddField(id)), rhs))
 
 	for _, attr := range plugin.Attributes {
 		if !Contains(CommonAttributes, attr.Name()) {
@@ -691,186 +724,9 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 		if attr.Name() == "tag_on_failure" {
 			continue
 		}
-		switch attr.Name() {
 
-		case "rename":
+		ingestProcessors = DealWithMutateAttributes(attr, ingestProcessors, id)
 
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				targetField := toElasticPipelineSelector(values[i])
-				ingestProcessors = append(ingestProcessors,
-					RenameProcessor{
-						Description: getStringPointer(fmt.Sprintf("Rename field '%s' to '%s'", keys[i], targetField)),
-						If:          constraintTranspiled,
-						TargetField: targetField,
-						Field:       keys[i],
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-		case "copy":
-			keys, values := getHashAttributeKeyValue(attr)
-
-			for i := range keys {
-
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-
-						If:        constraintTranspiled,
-						CopyFrom:  keys[i],
-						Field:     values[i],
-						OnFailure: onFailureProcessors,
-						Tag:       fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-		case "uppercase", "lowercase":
-			// Assuming only the field
-			switch tAttributes := attr.(type) {
-			case ast.ArrayAttribute:
-				for _, el := range tAttributes.Attributes {
-					ingestProcessors = append(ingestProcessors,
-						CaseProcessor{
-							Type:        attr.Name(), // either uppercase or lowercase
-							Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-							If:          constraintTranspiled,
-							TargetField: getStringAttributeString(el),
-							Field:       getStringAttributeString(el),
-							OnFailure:   onFailureProcessors,
-							Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-						})
-				}
-
-			default: // uppercase/lowercase require an Array
-				log.Printf("Mutate filter attribute '%s' not supported", attr.Name())
-			}
-
-		case "gsub":
-			// Assuming only the field
-			switch tAttributes := attr.(type) {
-			case ast.ArrayAttribute:
-
-				gsubexpression := getArrayStringAttributes(tAttributes)
-
-				if len(gsubexpression)%3 != 0 {
-					log.Printf("Gsub expects triplets of (field, pattern, replacement), while %d params are given", len(gsubexpression))
-				}
-
-				for i := 0; i < len(gsubexpression); i += 3 {
-					ingestProcessors = append(ingestProcessors,
-						GsubProcessor{
-							Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-							If:          constraintTranspiled,
-							Field:       gsubexpression[i],
-							Pattern:     gsubexpression[i+1],
-							Replacement: gsubexpression[i+2],
-							OnFailure:   onFailureProcessors,
-							Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-						})
-				}
-
-			}
-
-		case "join":
-
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					JoinProcessor{
-						Description:   getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-						If:            constraintTranspiled,
-						Separator:     values[i],
-						Field:         keys[i],
-						IgnoreFailure: false,
-						OnFailure:     onFailureProcessors,
-						Tag:           fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-		case "split":
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					SplitProcessor{
-						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-						If:          constraintTranspiled,
-						Separator:   values[i],
-						Field:       keys[i],
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-
-		case "trim":
-			to_trim_fields := getArrayStringAttributes(attr)
-			for _, field := range to_trim_fields {
-				ingestProcessors = append(ingestProcessors,
-					TrimProcessor{
-						Description: getStringPointer(plugin.Comment.String() + attr.CommentBlock()),
-						If:          constraintTranspiled,
-						Field:       toElasticPipelineSelector(field),
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					},
-				)
-			}
-
-		case "coerce":
-			keys, values := getHashAttributeKeyValue(attr)
-
-			newCondition := ""
-
-			for i := range keys {
-				field_is_null := getIfFieldUnDefined(keys[i])
-				if constraintTranspiled == nil {
-					newCondition = field_is_null
-				} else {
-					newCondition = field_is_null + " && (" + *constraintTranspiled + ")"
-				}
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("Set field '%s' to value '%s' if null (coerce)", keys[i], values[i])),
-						If:          getStringPointer(newCondition),
-						Value:       values[i],
-						Field:       keys[i],
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-
-		case "replace":
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
-						If:          constraintTranspiled,
-						Value:       values[i],
-						Field:       keys[i],
-						Override:    true,
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-
-		case "update":
-			keys, values := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				ingestProcessors = append(ingestProcessors,
-					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
-						If:          constraintTranspiled,
-						Value:       values[i],
-						Field:       keys[i],
-						Override:    true,
-						OnFailure:   onFailureProcessors,
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
-			}
-
-		default:
-			log.Printf("Mutate of type '%s' not supported", attr.Name())
-
-		}
 	}
 
 	// Mutate filter can only contain common attributes (e.g., add_field)
