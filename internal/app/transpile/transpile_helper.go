@@ -78,6 +78,7 @@ func MyJsonEncoder(m map[string]interface{}) string {
 	return string(buf.Bytes())
 }
 
+// Prepend the new If to make sure that the Logstash's original conditions apply first
 func AppendIf(origIf *string, newIf *string) *string {
 	var resIf *string = nil
 	if origIf == nil {
@@ -85,7 +86,7 @@ func AppendIf(origIf *string, newIf *string) *string {
 	} else if newIf == nil {
 		resIf = origIf
 	} else {
-		resIf = getStringPointer(fmt.Sprintf("(%s) && (%s)", *origIf, *newIf))
+		resIf = getStringPointer(fmt.Sprintf("(%s) && (%s)", *newIf, *origIf))
 	}
 	return resIf
 }

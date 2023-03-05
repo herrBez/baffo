@@ -74,26 +74,17 @@ func (f Transpile) Run(args []string) error {
 	return nil
 }
 
-type TranspileProcessor func(plugin ast.Plugin, constraint Constraints) []IngestProcessor
-type TranspileProcessorV2 func(plugin ast.Plugin, constraint *string, id string, onSuccessProcessors []IngestProcessor, i []IngestProcessor) []IngestProcessor
-
-var transpiler = map[string]map[string]TranspileProcessor{
-	"input": {},
-	"filter": {
-		"mutate":  DealWithMutate,
-		"grok":    DealWithGrok,
-		"kv":      DealWithKV,
-		"dissect": DealWithDissect,
-		"date":    DealWithDate,
-		"drop":    DealWithDrop,
-	},
-	"output": {},
-}
+type TranspileProcessorV2 func(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor)
 
 var transpilerV2 = map[string]map[string]TranspileProcessorV2{
 	"input": {},
 	"filter": {
-		"mutate": DealWithMutateV2,
+		"mutate":  DealWithMutateV2,
+		"drop":    DealWithDropV2,
+		"date":    DealWithDateV2,
+		"dissect": DealWithDissectV2,
+		"grok":    DealWithGrokV2,
+		"kv":      DealWithKVV2,
 	},
 	"output": {},
 }
@@ -113,10 +104,6 @@ func transpileBoolExpression(bo ast.BooleanOperator) string {
 		//	case ast.Xor: ""
 		// case ast.Nand:
 	}
-	return ""
-}
-
-func transpileExpression(expr ast.Expression) string {
 	return ""
 }
 
@@ -504,82 +491,6 @@ else {
 	return ingestProcessors
 }
 
-func DealWithMutate(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
-	ingestProcessors := []IngestProcessor{}
-
-	id := getProcessorID(plugin)
-
-	constraintTranspiled := transpileConstraint(constraint)
-
-	onFailureProcessors := []IngestProcessor{}
-
-	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
-		switch attr.Name() {
-		case "tag_on_failure":
-			onFailureProcessors = DealWithTagOnFailure(attr, id)
-		}
-	}
-	if len(onFailureProcessors) == 0 {
-		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_mutate_error", ast.DoubleQuoted)), id)
-	}
-
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
-
-	if len(onSuccessProcessors) > 0 {
-		onFailureProcessors = append(onFailureProcessors, getTranspilerOnFailureProcessor(id))
-	}
-
-	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
-		if attr.Name() == "tag_on_failure" {
-			continue
-		}
-
-		ingestProcessors = DealWithMutateAttributes(attr, ingestProcessors, id)
-
-	}
-
-	// To keep a similar semantics
-	if len(ingestProcessors) > 1 {
-		ingestProcessors = []IngestProcessor{
-			PipelineProcessor{
-				Pipeline: IngestPipeline{
-					Name:                id,
-					Processors:          ingestProcessors,
-					OnFailureProcessors: onFailureProcessors,
-				},
-				Name: id,
-				If:   constraintTranspiled,
-			},
-		}
-	} else {
-		log.Info().Msg("Here")
-		// Otherwise add OnFailureProcessor to Each processor
-		for i := range ingestProcessors {
-			ingestProcessors[i] = ingestProcessors[i].SetOnFailure(onFailureProcessors)
-			ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled, true)
-		}
-	}
-
-	onSuccessProcessors = DealWithCommonAttributes(plugin, constraint, id)
-
-	// Mutate filter can only contain common attributes (e.g., add_field)
-	// In this case we are always in the "OnSuccess" case, thus we can simplify the condition
-	if len(ingestProcessors) == 0 { // There are only unsupported or the common attributes
-		for i := range onSuccessProcessors {
-			onSuccessProcessors[i] = onSuccessProcessors[i].SetIf(constraintTranspiled, false)
-		}
-	}
-
-	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
-	return ingestProcessors
-}
-
 func DealWithTagOnFailure(attr ast.Attribute, id string) []IngestProcessor {
 	return []IngestProcessor{AppendProcessor{
 		Tag:         fmt.Sprintf("append-tag-%s", id),
@@ -646,19 +557,29 @@ func getIfFieldIsDefinedAndEqualsValue(field string, val *string) string {
 	return fmt.Sprintf("%s.containsKey('%s') && ctx.%s == %s", newFieldButLastMaybe, splittedField[len(splittedField)-1], field, valString)
 }
 
-func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id string) []IngestProcessor {
-	ingestProcessors := []IngestProcessor{}
-	constraintTranspiled := transpileConstraint(constraint)
-
-	var rhs string
-
-	if constraintTranspiled == nil {
-		rhs = ""
+// processorsToPipeline convert a list of processors to a pipeline with name `name` if the length of the list execeeds the `threshold`
+// Otherwise it returns the list as-is
+func processorsToPipeline(ingestProcessors []IngestProcessor, name string, threshold int) []IngestProcessor {
+	if len(ingestProcessors) <= threshold {
+		return ingestProcessors
 	} else {
-		rhs = " && (" + *constraintTranspiled + ")"
+		return []IngestProcessor{
+			PipelineProcessor{
+				Pipeline: IngestPipeline{
+					Name:                name,
+					Processors:          ingestProcessors,
+					OnFailureProcessors: nil,
+				},
+				Name: name,
+			},
+		}
 	}
+}
 
-	ifString := getStringPointer(fmt.Sprintf("!%s%s", getIfFieldDefined(getUniqueOnFailureAddField(id)), rhs))
+func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, id string, threshold int) []IngestProcessor {
+	ingestProcessors := []IngestProcessor{}
+
+	onSuccessCondition := getStringPointer(fmt.Sprintf("!%s", getIfFieldDefined(getUniqueOnFailureAddField(id))))
 
 	for _, attr := range plugin.Attributes {
 		if !Contains(CommonAttributes, attr.Name()) {
@@ -676,10 +597,8 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
 						Description: getStringPointer(fmt.Sprintf("On Success of %s, add field '%s' with value '%s'", id, keys[i], value)),
-						If:          ifString,
 						Value:       value,
 						Field:       keys[i],
-						OnFailure:   nil,
 						Tag:         fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 					})
 			}
@@ -687,7 +606,6 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 			ingestProcessors = append(ingestProcessors,
 				RemoveProcessor{
 					Field: getStringAttributeString(attr),
-					If:    ifString,
 					Tag:   fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 				},
 			)
@@ -697,7 +615,6 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 					Tag:   fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 					Field: "tags",
 					Value: getArrayStringAttributes(attr),
-					If:    ifString,
 				},
 			)
 		case "id": // Already Added
@@ -709,12 +626,138 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraint Constraints, id stri
 
 		}
 	}
+
+	ingestProcessors = processorsToPipeline(ingestProcessors, fmt.Sprintf("%s-on-success", id), 1)
+
+	for i := range ingestProcessors {
+		log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
+		ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled, false)
+		ingestProcessors[i] = ingestProcessors[i].SetIf(onSuccessCondition, true)
+	}
+
 	return ingestProcessors
 
 }
 
-func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string, onSuccessProcessors []IngestProcessor, ingestProcessors []IngestProcessor) []IngestProcessor {
+func DealWithDropV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessors := []IngestProcessor{}
 
+	proc := DropProcessor{
+		Tag: id,
+	}
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		case "percentage":
+			switch tattr := attr.(type) {
+			case ast.NumberAttribute:
+				value := int(tattr.Value())
+				log.Info().Msgf("Percentage %d", value)
+				// TODO Add seed?
+				// TODO Make sure that random number is generated only on need
+				proc = proc.SetIf(getStringPointer(fmt.Sprintf("new Random().nextInt(100) < %d", value)), true).(DropProcessor)
+			}
+		// Add if condition
+
+		default:
+			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+		}
+	}
+
+	ingestProcessors = append(ingestProcessors, proc)
+
+	return ingestProcessors, onFailureProcessors
+}
+
+func DealWithDateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessors := []IngestProcessor{}
+
+	proc := DateProcessor{
+		Tag: id,
+	}
+
+	for _, attr := range plugin.Attributes {
+		if Contains(CommonAttributes, attr.Name()) {
+			continue
+		}
+		switch attr.Name() {
+		// It is a common field
+		case "tag_on_failure":
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
+		case "target":
+			proc.TargetField = getStringPointer(getStringAttributeString(attr))
+		case "locale":
+			log.Printf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
+			proc.Locale = getStringPointer(getStringAttributeString(attr))
+		case "timezone":
+			log.Printf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
+			proc.Timezone = getStringPointer(getStringAttributeString(attr))
+
+		case "match":
+			matchArray := getArrayStringAttributes(attr)
+			proc.Field = matchArray[0]
+			proc.Formats = matchArray[1:]
+
+		default:
+			log.Printf("Attribute '%s' is currently not supported", attr.Name())
+
+		}
+	}
+	// Add _kv_filter_error
+	if len(onFailureProcessors) == 0 {
+		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_data_parse_failure", ast.DoubleQuoted)), id)
+	}
+
+	ingestProcessors = append(ingestProcessors, proc)
+
+	return ingestProcessors, onFailureProcessors
+}
+
+func DealWithGrokV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailurePorcessors := []IngestProcessor{}
+
+	gp := GrokProcessor{
+		Tag: id,
+	}
+
+	for _, attr := range plugin.Attributes {
+		if Contains(CommonAttributes, attr.Name()) {
+			continue
+		}
+		switch attr.Name() {
+		// It is a common field
+		case "match":
+			helpPattern := hashAttributeToMapArray(attr)
+			// TODO: Deal with multiple keys, currently only the last is used
+			for key := range helpPattern {
+				gp.Patterns = helpPattern[key]
+			}
+
+		case "ecs_compatibility":
+			gp.ECSCompatibility = getStringAttributeString(attr)
+		case "pattern_definitions":
+			gp.PatternDefinitions = hashAttributeToMap(attr)
+		case "tag_on_failure":
+			onFailurePorcessors = DealWithTagOnFailure(attr, id)
+		default:
+			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
+
+		}
+	}
+	// Add _grok_parse_failure
+	if len(gp.OnFailure) == 0 {
+		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_grok_parse_failure", ast.DoubleQuoted)), id)
+	}
+
+	ingestProcessors = append(ingestProcessors, gp)
+	return ingestProcessors, onFailurePorcessors
+}
+
+func DealWithMutateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
 	for _, attr := range plugin.Attributes {
@@ -726,21 +769,53 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 
 	// Add default value for Tag_on_failure
 	if len(onFailureProcessors) == 0 {
-		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_mutate_error", ast.DoubleQuoted)), id)
+		onFailureProcessors = append(onFailureProcessors, DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_mutate_error", ast.DoubleQuoted)), id)...)
 	}
 
-	// On Success Processors should be executed only when no Failure happened
-	if len(onSuccessProcessors) > 0 {
-		onFailureProcessors = append(onFailureProcessors, getTranspilerOnFailureProcessor(id))
-	}
-
+	// Extract the attributes
 	for _, attr := range plugin.Attributes {
 		if attr.Name() == "tag_on_failure" {
 			continue
 		}
-
 		ingestProcessors = DealWithMutateAttributes(attr, ingestProcessors, id)
+	}
 
+	log.Info().Msgf("Length: %d", len(ingestProcessors))
+
+	return ingestProcessors, onFailureProcessors
+}
+
+// Generic function that deal with a single Logstash Plugin by using Template Method Pattern
+func DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+	id := getProcessorID(plugin)
+	log.Info().Msgf("Plugin ID is %s", id)
+
+	DealWithPluginFunction, ok := transpilerV2[section][plugin.Name()]
+	if !ok {
+		log.Warn().Msgf("There is no handler for the %s plugin of type '%s' (with id '%s')\nReturning an empty processors list", section, plugin.Name(), id)
+		return []IngestProcessor{}
+	}
+
+	constraintTranspiled := transpileConstraint(constraint)
+
+	onSuccessProcessors := DealWithCommonAttributes(plugin, constraintTranspiled, id, 1)
+
+	noncommonattrs := []ast.Attribute{}
+
+	for _, pa := range plugin.Attributes {
+		if !Contains(CommonAttributes, pa.Name()) {
+			noncommonattrs = append(noncommonattrs, pa)
+		}
+	}
+
+	// PA is a Plugin with only Plugin-Specific attributes (no id, no add_field etc.)
+	pa := ast.NewPlugin(plugin.Name(), noncommonattrs...)
+
+	ingestProcessors, onFailureProcessors := DealWithPluginFunction(pa, id)
+
+	// On Success Processors should be executed only when no Failure happened
+	if len(onSuccessProcessors) > 0 {
+		onFailureProcessors = append(onFailureProcessors, getTranspilerOnFailureProcessor(id))
 	}
 
 	// Mutate filter can only contain common attributes (e.g., add_field)
@@ -751,29 +826,16 @@ func DealWithMutateV2(plugin ast.Plugin, constraintTranspiled *string, id string
 		}
 	}
 
-	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
-	return ingestProcessors
-}
+	// To keep a similar semantics as Logstash we create an additional pipeline
+	// If we have more than one Processor that has been created by the plugin-specific function
+	ingestProcessors = processorsToPipeline(ingestProcessors, id, 1)
 
-func DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) []IngestProcessor {
-	ingestProcessors := []IngestProcessor{}
-	constraintTranspiled := transpileConstraint(constraint)
-
-	id := getProcessorID(plugin)
-
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
-
-	noncommonattrs := []ast.Attribute{}
-
-	for _, pa := range plugin.Attributes {
-		if !Contains(CommonAttributes, pa.Name()) {
-			noncommonattrs = append(noncommonattrs, pa)
-		}
+	for i := range ingestProcessors {
+		ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled, true)
+		ingestProcessors[i] = ingestProcessors[i].SetOnFailure(onFailureProcessors)
 	}
 
-	pa := ast.NewPlugin(plugin.Name(), noncommonattrs...)
-
-	ingestProcessors = transpilerV2[section][plugin.Name()](pa, constraintTranspiled, id, onSuccessProcessors, ingestProcessors)
+	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
 
 	return ingestProcessors
 }
@@ -796,71 +858,16 @@ func getProcessorID(plugin ast.Plugin) string {
 	return id
 }
 
-func DealWithGrok(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+func DealWithKVV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
-
-	id := getProcessorID(plugin)
-
-	constraintTranspiled := transpileConstraint(constraint)
-
-	gp := GrokProcessor{
-		Tag: getProcessorID(plugin),
-		If:  constraintTranspiled,
-	}
-
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
-
-	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
-		switch attr.Name() {
-		// It is a common field
-		case "match":
-			helpPattern := hashAttributeToMapArray(attr)
-			// TODO: Deal with multiple keys, currently only the last is used
-			for key := range helpPattern {
-				gp.Patterns = helpPattern[key]
-			}
-
-		case "ecs_compatibility":
-			gp.ECSCompatibility = getStringAttributeString(attr)
-		case "pattern_definitions":
-			gp.PatternDefinitions = hashAttributeToMap(attr)
-		case "tag_on_failure":
-			gp.OnFailure = DealWithTagOnFailure(attr, id)
-		default:
-			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
-
-		}
-	}
-	// Add _grok_parse_failure
-	if len(gp.OnFailure) == 0 {
-		gp.OnFailure = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_grok_parse_failure", ast.DoubleQuoted)), id)
-	}
-
-	ingestProcessors = append(ingestProcessors, gp)
-	// TODO Add processors if on success and not always
-	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
-	return ingestProcessors
-}
-
-func DealWithKV(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
-	ingestProcessors := []IngestProcessor{}
-
-	id := getProcessorID(plugin)
-
-	constraintTranspiled := transpileConstraint(constraint)
+	onFailureProcessors := []IngestProcessor{}
 
 	kv := KVProcessor{
 		Tag:        id,
-		If:         constraintTranspiled,
 		FieldSplit: " ",       // Default value in Logstash
 		Field:      "message", // Default value in Logstash
 	}
 
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
-
 	for _, attr := range plugin.Attributes {
 		if Contains(CommonAttributes, attr.Name()) {
 			continue
@@ -868,7 +875,7 @@ func DealWithKV(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 		switch attr.Name() {
 		// It is a common field
 		case "tag_on_failure":
-			kv.OnFailure = DealWithTagOnFailure(attr, id)
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
 		case "target":
 			kv.TargetField = getStringPointer(getStringAttributeString(attr))
 		case "prefix":
@@ -890,41 +897,26 @@ func DealWithKV(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 	}
 	// Add _kv_filter_error
 	if len(kv.OnFailure) == 0 {
-		kv.OnFailure = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_kv_filter_error", ast.DoubleQuoted)), id)
+		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_kv_filter_error", ast.DoubleQuoted)), id)
 	}
-
-	if len(onSuccessProcessors) > 0 {
-		kv.OnFailure = append(kv.OnFailure, getTranspilerOnFailureProcessor(id))
-	}
-
 	ingestProcessors = append(ingestProcessors, kv)
-	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
 
-	return ingestProcessors
+	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithDissect(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+func DealWithDissectV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
-
-	id := getProcessorID(plugin)
-
-	constraintTranspiled := transpileConstraint(constraint)
+	onFailureProcessors := []IngestProcessor{}
 
 	proc := DissectProcessor{
 		Tag: id,
-		If:  constraintTranspiled,
 	}
 
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
-
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
 		switch attr.Name() {
 		// It is a common field
 		case "tag_on_failure":
-			proc.OnFailure = DealWithTagOnFailure(attr, id)
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
 		case "mapping":
 			keys, values := getHashAttributeKeyValue(attr)
 			if len(keys) != 1 {
@@ -932,114 +924,17 @@ func DealWithDissect(plugin ast.Plugin, constraint Constraints) []IngestProcesso
 			}
 			proc.Field = keys[0]
 			proc.Pattern = values[0]
-
-		default:
-			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
-
-		}
-	}
-	// Add _kv_filter_error
-	if len(proc.OnFailure) == 0 {
-		proc.OnFailure = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_dissectfailure", ast.DoubleQuoted)), id)
-	}
-
-	if len(onSuccessProcessors) > 0 {
-		proc.OnFailure = append(proc.OnFailure, getTranspilerOnFailureProcessor(id))
-	}
-
-	ingestProcessors = append(ingestProcessors, proc)
-	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
-
-	return ingestProcessors
-}
-
-func DealWithDrop(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
-	ingestProcessors := []IngestProcessor{}
-
-	id := getProcessorID(plugin)
-
-	constraintTranspiled := transpileConstraint(constraint)
-
-	proc := DropProcessor{
-		Tag: id,
-		If:  constraintTranspiled,
-	}
-
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
-
-	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
-		switch attr.Name() {
-		// case "percentage":
-		// Add if condition
-
 		default:
 			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
 	}
-
-	ingestProcessors = append(ingestProcessors, proc)
-	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
-
-	return ingestProcessors
-}
-
-func DealWithDate(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
-	ingestProcessors := []IngestProcessor{}
-
-	id := getProcessorID(plugin)
-
-	constraintTranspiled := transpileConstraint(constraint)
-
-	proc := DateProcessor{
-		Tag: id,
-		If:  constraintTranspiled,
-	}
-
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraint, id)
-
-	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
-		switch attr.Name() {
-		// It is a common field
-		case "tag_on_failure":
-			proc.OnFailure = DealWithTagOnFailure(attr, id)
-		case "target":
-			proc.TargetField = getStringPointer(getStringAttributeString(attr))
-		case "locale":
-			log.Printf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
-			proc.Locale = getStringPointer(getStringAttributeString(attr))
-		case "timezone":
-			log.Printf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
-			proc.Timezone = getStringPointer(getStringAttributeString(attr))
-
-		case "match":
-			matchArray := getArrayStringAttributes(attr)
-			proc.Field = matchArray[0]
-			proc.Formats = matchArray[1:]
-
-		default:
-			log.Printf("Attribute '%s' is currently not supported", attr.Name())
-
-		}
-	}
-	// Add _kv_filter_error
+	// Add dissect failure default tag
 	if len(proc.OnFailure) == 0 {
-		proc.OnFailure = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_data_parse_failure", ast.DoubleQuoted)), id)
-	}
-
-	if len(onSuccessProcessors) > 0 {
-		proc.OnFailure = append(proc.OnFailure, getTranspilerOnFailureProcessor(id))
+		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_dissectfailure", ast.DoubleQuoted)), id)
 	}
 
 	ingestProcessors = append(ingestProcessors, proc)
-	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
-
-	return ingestProcessors
+	return ingestProcessors, onFailureProcessors
 }
 
 func DealWithMissingTranspiler(plugin ast.Plugin, constraint Constraints) []IngestProcessor {
@@ -1077,22 +972,26 @@ func buildIngestPipeline(c ast.Config) {
 		Processors:          []IngestProcessor{},
 		OnFailureProcessors: nil,
 	}
-	applyFunc := func(c *Cursor, constraint Constraints) {
-		// fmt.Printf("Plugin: %s, Pos: %s\n", c.Plugin().Name(), c.Plugin().Pos())
+	// apply func returns an ApplyPluginsFuncCondition object depending on the section
+	applyFunc := func(section string) ApplyPluginsFuncCondition {
+		return func(c *Cursor, constraint Constraints) {
+			// fmt.Printf("Plugin: %s, Pos: %s\n", c.Plugin().Name(), c.Plugin().Pos())
 
-		f, ok := transpiler["filter"][c.Plugin().Name()]
-		if !ok {
-			log.Printf("There is no handler for the plugin %s\n", c.Plugin().Name())
-			f = DealWithMissingTranspiler
+			// f, ok := transpiler["filter"][c.Plugin().Name()]
+			// if !ok {
+			// 	log.Printf("There is no handler for the plugin %s\n", c.Plugin().Name())
+			// 	f = DealWithMissingTranspiler
+			// }
+			// ip.Processors = append(ip.Processors, f(*c.Plugin(), constraint)...)
+
+			ip.Processors = append(ip.Processors, DealWithPlugin(section, *c.Plugin(), constraint)...)
+
+			plugin_names = append(plugin_names, c.Plugin().Name())
 		}
-		ip.Processors = append(ip.Processors, f(*c.Plugin(), constraint)...)
-		// ip.Processors = DealWithPlugin(*c.Plugin(), constraint)
-
-		plugin_names = append(plugin_names, c.Plugin().Name())
 	}
 
 	for _, f := range c.Filter {
-		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc)
+		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("filter"))
 	}
 
 	ips := getAllIngestPipeline(ip)
