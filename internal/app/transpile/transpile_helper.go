@@ -928,3 +928,49 @@ func (sp GeoIPProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 	sp.OnFailure = s
 	return sp
 }
+
+type UserAgentProcessor struct {
+	Field             string            `json:"field"`
+	TargetField       *string           `json:"target_field,omitempty"`
+	RegexFile         *string           `json:"regex_file,omitempty"`
+	Properties        *[]string         `json:"properties,omitempty"`
+	ExtractDeviceType string            `json:"extract_deviceType,omitempty"`
+	IgnoreMissing     *bool             `json:"ignore_missing,omitempty"`
+	Description       *string           `json:"description,omitempty"`
+	If                *string           `json:"if,omitempty"`
+	IgnoreFailure     bool              `json:"ignore_failure,omitempty"`
+	Tag               string            `json:"tag"`
+	OnFailure         []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ip UserAgentProcessor) MarshalJSON() ([]byte, error) {
+	type UserAgentProcessorAlias UserAgentProcessor
+
+	return json.Marshal(
+		map[string]UserAgentProcessorAlias{
+			ip.IngestProcessorType(): (UserAgentProcessorAlias)(ip),
+		},
+	)
+}
+
+func (sp UserAgentProcessor) String() string {
+	return StringHelper(sp)
+}
+
+func (sp UserAgentProcessor) IngestProcessorType() string {
+	return "user_agent"
+}
+
+func (sp UserAgentProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
+	return sp
+}
+
+func (sp UserAgentProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
