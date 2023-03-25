@@ -882,3 +882,49 @@ func (ip ConvertProcessor) MarshalJSON() ([]byte, error) {
 		},
 	)
 }
+
+type GeoIPProcessor struct {
+	Field         string            `json:"field"`
+	TargetField   *string           `json:"target_field,omitempty"`
+	DatabaseFile  *string           `json:"database_file,omitempty"`
+	Properties    *[]string         `json:"properties,omitempty"`
+	IgnoreMissing *bool             `json:"ignore_missing,omitempty"`
+	FirstOnly     *bool             `json:"first_only,omitempty"`
+	Description   *string           `json:"description,omitempty"`
+	If            *string           `json:"if,omitempty"`
+	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
+	Tag           string            `json:"tag"`
+	OnFailure     []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ip GeoIPProcessor) MarshalJSON() ([]byte, error) {
+	type GeoIPProcessorAlias GeoIPProcessor
+
+	return json.Marshal(
+		map[string]GeoIPProcessorAlias{
+			ip.IngestProcessorType(): (GeoIPProcessorAlias)(ip),
+		},
+	)
+}
+
+func (sp GeoIPProcessor) String() string {
+	return StringHelper(sp)
+}
+
+func (sp GeoIPProcessor) IngestProcessorType() string {
+	return "geoip"
+}
+
+func (sp GeoIPProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
+	return sp
+}
+
+func (sp GeoIPProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}

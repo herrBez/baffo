@@ -10,6 +10,7 @@ import (
 	"go.elastic.co/ecszerolog"
 
 	// "strings"
+	"bytes"
 	"fmt"
 
 	"github.com/hashicorp/go-multierror"
@@ -85,6 +86,7 @@ var transpilerV2 = map[string]map[string]TranspileProcessorV2{
 		"dissect": DealWithDissectV2,
 		"grok":    DealWithGrokV2,
 		"kv":      DealWithKVV2,
+		"cidr":    DealWithCidrV2,
 	},
 	"output": {},
 }
@@ -502,14 +504,45 @@ func DealWithTagOnFailure(attr ast.Attribute, id string) []IngestProcessor {
 
 var CommonAttributes = []string{"add_field", "remove_field", "add_tag", "id", "enable_metric", "periodic_flush", "remove_tag"}
 
-func toElasticPipelineSelectorExpression(s string) string {
+const (
+	ScriptContext = iota
+	ProcessorContext
+)
+
+func toElasticPipelineSelectorExpression(s string, context int) string {
 	newS := s
 	// Strings of type foo_%{[afield]}
 	field_finder := regexp.MustCompile(`\%\{([^\}]+)\}`)
+	startWithSelector := true
+	firstRun := true
 	for _, m := range field_finder.FindAll([]byte(s), -1) {
+
 		log.Info().Msg(toElasticPipelineSelector(string(m[2 : len(m)-1])))
-		newS = strings.Replace(newS, string(m), "{{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}}", 1)
+		if context == ProcessorContext {
+			newS = strings.Replace(newS, string(m), "{{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}}", 1)
+		} else if context == ScriptContext {
+			var fieldValue = toElasticPipelineSelectorCondition(toElasticPipelineSelector(string(m[2 : len(m)-1])))
+
+			pos := field_finder.FindStringIndex(newS)
+			if firstRun && pos[0] != 0 {
+				firstRun = false
+				startWithSelector = false
+			}
+
+			if pos[0] > 0 {
+				fieldValue = "' + " + fieldValue
+			}
+			if pos[1] < len(newS)-1 {
+				fieldValue = fieldValue + " + '"
+			}
+			newS = strings.Replace(newS, string(m), fieldValue, 1)
+		}
 	}
+
+	if context == ScriptContext && !startWithSelector {
+		newS = "'" + newS
+	}
+
 	return newS
 }
 
@@ -592,7 +625,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 
 			for i := range keys {
 
-				value := toElasticPipelineSelectorExpression(values[i])
+				value := toElasticPipelineSelectorExpression(values[i], ProcessorContext)
 
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
@@ -715,6 +748,44 @@ func DealWithDateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 	return ingestProcessors, onFailureProcessors
 }
 
+func DealWithGeoIPV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailurePorcessors := []IngestProcessor{}
+
+	gp := GeoIPProcessor{
+		Tag: id,
+	}
+
+	// TODO Add all properties
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		case "fields":
+			properties := getArrayStringAttributes(attr)
+			gp.Properties = &properties
+
+		case "source":
+			gp.Field = getStringAttributeString(attr)
+
+		case "target":
+			gp.TargetField = getStringPointer(getStringAttributeString(attr))
+
+		case "tag_on_failure":
+			onFailurePorcessors = DealWithTagOnFailure(attr, id)
+
+		default:
+			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
+
+		}
+	}
+	// Add _grok_parse_failure
+	if len(gp.OnFailure) == 0 {
+		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_geoip_lookup_failure", ast.DoubleQuoted)), id)
+	}
+
+	ingestProcessors = append(ingestProcessors, gp)
+	return ingestProcessors, onFailurePorcessors
+}
+
 func DealWithGrokV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
@@ -754,6 +825,59 @@ func DealWithGrokV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 
 	ingestProcessors = append(ingestProcessors, gp)
 	return ingestProcessors, onFailurePorcessors
+}
+
+// CIDR Plugin of Logstash
+// CIDR is only available in a script and there is no processor that can substitute it as of now
+// Given the current TemplateMethod Pattern and how we deal in a generic way with onSuccessProcessors
+// the implementation generates (overcomplicated, but semantically similar) processors:
+//   - 1. A script fails (throws an Exception) if no address matches the CIDR expressions provided
+//   - 2. The onFailureProcessor adds a field _TRANSPILER.<id>
+//   - 3. If the field is not present the onSuccessProcessors are executed
+func DealWithCidrV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessor := []IngestProcessor{}
+	addresses := []string{}
+	networks := []string{}
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		case "address":
+			addresses = getArrayStringAttributes(attr)
+		case "network":
+			networks = getArrayStringAttributes(attr)
+		}
+	}
+
+	var b bytes.Buffer
+
+	b.WriteString(fmt.Sprintf(`def cidrs = new CIDR[%d];`, len(networks)))
+	for i, c := range networks {
+		b.WriteString(fmt.Sprintf(`cidrs[%d] = new CIDR('%s');`, i, c))
+	}
+	elastic_addresses := []string{}
+	for _, a := range addresses {
+		elastic_addresses = append(elastic_addresses, toElasticPipelineSelectorExpression(a, ScriptContext))
+	}
+
+	b.WriteString(
+		fmt.Sprintf(`
+for (c in cidrs) {
+	for (a in %s) {
+		if (c.contains(a)) {
+			return;
+		}
+	}
+}
+throw new Exception("Could not find CIDR value");
+`, elastic_addresses))
+
+	ingestProcessors = append(ingestProcessors, ScriptProcessor{
+		Source: getStringPointer(b.String()),
+		Tag:    id,
+	})
+
+	return ingestProcessors, onFailureProcessor
 }
 
 func DealWithMutateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
