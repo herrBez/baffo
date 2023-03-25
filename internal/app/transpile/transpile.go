@@ -79,14 +79,15 @@ type TranspileProcessorV2 func(plugin ast.Plugin, id string) ([]IngestProcessor,
 var transpilerV2 = map[string]map[string]TranspileProcessorV2{
 	"input": {},
 	"filter": {
-		"mutate":  DealWithMutateV2,
-		"drop":    DealWithDropV2,
-		"date":    DealWithDateV2,
-		"dissect": DealWithDissectV2,
-		"grok":    DealWithGrokV2,
-		"kv":      DealWithKVV2,
-		"cidr":    DealWithCidrV2,
-		"geoip":   DealWithGeoIPV2,
+		"mutate":    DealWithMutateV2,
+		"drop":      DealWithDropV2,
+		"date":      DealWithDateV2,
+		"dissect":   DealWithDissectV2,
+		"grok":      DealWithGrokV2,
+		"kv":        DealWithKVV2,
+		"cidr":      DealWithCidrV2,
+		"geoip":     DealWithGeoIPV2,
+		"useragent": DealWithUserAgentV2,
 	},
 	"output": {},
 }
@@ -821,6 +822,82 @@ func DealWithGeoIPV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 				gp_other.TargetField = getStringPointer(*gp.TargetField + ".geo")
 			}
 			ingestProcessors = append(ingestProcessors, gp_other)
+		}
+	}
+	return ingestProcessors, onFailurePorcessors
+}
+
+func DealWithUserAgentV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailurePorcessors := []IngestProcessor{}
+
+	ecs_compatibility := "v8"
+
+	uap := UserAgentProcessor{
+		Tag: id,
+	}
+
+	// TODO Add all properties
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		case "ecs_compatibility":
+			ecs_compatibility = getStringAttributeString(attr)
+			log.Info().Msgf("ECS COMPATIBILITY %s", ecs_compatibility)
+
+		case "lru_cache_size":
+			log.Info().Msg(`
+				[useragent filter plugin] The attribute 'lru_cache_size' is set in Logstash. 
+				Elasticsearch support a per-node setting 'ingest.user_agent.cache_size'. 
+				More details can be found in the documentation https://www.elastic.co/guide/en/elasticsearch/reference/current/user-agent-processor.html#ingest-user-agent-settings
+			`)
+
+		case "regexes":
+			uap.RegexFile = getStringPointer(getStringAttributeString(attr))
+
+		case "source":
+			uap.Field = toElasticPipelineSelector(getStringAttributeString(attr))
+
+		case "target":
+			uap.TargetField = getStringPointer(toElasticPipelineSelector(getStringAttributeString(attr)))
+
+		default:
+			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
+
+		}
+	}
+
+	// Add a TargetField is not already present based on ECS_Compatibility
+	if uap.TargetField == nil {
+		if ecs_compatibility == "disabled" {
+			uap.TargetField = getStringPointer("")
+		} else if ecs_compatibility == "v8" || ecs_compatibility == "v1" {
+			log.Debug().Msg("Nothing to do since the UserAgent Processor already uses user_agent as target field")
+		}
+	}
+	ingestProcessors = append(ingestProcessors, uap)
+
+	// Add Warning and Field renaming when ECS Compatibility is disabled
+	if ecs_compatibility == "disabled" {
+		log.Warn().Msg("Disabled ECS_Compatibility is only partially supported. Fields os_name, os_full")
+
+		orig := []string{"os.name", "os.full", "device.name"}
+		dest := []string{"os_name", "os_full", "device"}
+
+		prefix := *uap.TargetField
+
+		if len(prefix) > 0 {
+			prefix = prefix + "."
+		}
+
+		// Strictly Speaking these are onsucessprocessors and should be only executed on success
+		for i := range orig {
+			ingestProcessors = append(ingestProcessors, RenameProcessor{
+				Field:         prefix + orig[i],
+				TargetField:   prefix + dest[i],
+				IgnoreFailure: true,
+				IgnoreMissing: true,
+				Tag:           id + "rename",
+			})
 		}
 	}
 	return ingestProcessors, onFailurePorcessors
