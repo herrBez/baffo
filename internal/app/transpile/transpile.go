@@ -9,7 +9,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.elastic.co/ecszerolog"
 
-	// "strings"
 	"bytes"
 	"fmt"
 
@@ -87,6 +86,7 @@ var transpilerV2 = map[string]map[string]TranspileProcessorV2{
 		"grok":    DealWithGrokV2,
 		"kv":      DealWithKVV2,
 		"cidr":    DealWithCidrV2,
+		"geoip":   DealWithGeoIPV2,
 	},
 	"output": {},
 }
@@ -215,7 +215,7 @@ func getHashAttributeKeyValue(attr ast.Attribute) ([]string, []string) {
 
 			switch tValue := entry.Value.(type) {
 			case ast.StringAttribute:
-				values = append(values, tValue.Value())
+				values = append(values, toElasticPipelineSelector(tValue.Value()))
 
 			default:
 				log.Panic().Msg("Unexpected key of type not string")
@@ -751,6 +751,7 @@ func DealWithDateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 func DealWithGeoIPV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
+	properties := []string{}
 
 	gp := GeoIPProcessor{
 		Tag: id,
@@ -760,14 +761,13 @@ func DealWithGeoIPV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
 		case "fields":
-			properties := getArrayStringAttributes(attr)
-			gp.Properties = &properties
+			properties = getArrayStringAttributes(attr)
 
 		case "source":
-			gp.Field = getStringAttributeString(attr)
+			gp.Field = toElasticPipelineSelector(getStringAttributeString(attr))
 
 		case "target":
-			gp.TargetField = getStringPointer(getStringAttributeString(attr))
+			gp.TargetField = getStringPointer(toElasticPipelineSelector(getStringAttributeString(attr)))
 
 		case "tag_on_failure":
 			onFailurePorcessors = DealWithTagOnFailure(attr, id)
@@ -777,12 +777,52 @@ func DealWithGeoIPV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 
 		}
 	}
+
 	// Add _grok_parse_failure
 	if len(gp.OnFailure) == 0 {
 		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_geoip_lookup_failure", ast.DoubleQuoted)), id)
 	}
 
-	ingestProcessors = append(ingestProcessors, gp)
+	// Fields are defined
+	if len(properties) > 0 {
+		asn_properties := []string{}
+		other_properties := []string{}
+		// Normalizing and dispatch in sub-arrays
+		for i := range properties {
+			properties[i] = strings.ToLower(properties[i])
+			switch properties[i] {
+			case "autonomous_system_number":
+				asn_properties = append(asn_properties, "asn")
+			case "autonomous_system_organization":
+				asn_properties = append(asn_properties, "organization_name")
+			default:
+				other_properties = append(other_properties, properties[i])
+			}
+		}
+		if len(asn_properties) > 0 {
+			gp_asn := GeoIPProcessor{
+				Tag:          gp.Tag + "asn",
+				Field:        gp.Field,
+				DatabaseFile: getStringPointer("GeoLite2-ASN.mmdb"),
+				Properties:   &asn_properties,
+			}
+			if gp.TargetField != nil {
+				gp_asn.TargetField = getStringPointer(*gp.TargetField + ".as")
+			}
+			ingestProcessors = append(ingestProcessors, gp_asn)
+		}
+		if len(other_properties) > 0 {
+			gp_other := GeoIPProcessor{
+				Tag:        gp.Tag,
+				Field:      gp.Field,
+				Properties: &other_properties,
+			}
+			if gp.TargetField != nil {
+				gp_other.TargetField = getStringPointer(*gp.TargetField + ".geo")
+			}
+			ingestProcessors = append(ingestProcessors, gp_other)
+		}
+	}
 	return ingestProcessors, onFailurePorcessors
 }
 
@@ -904,7 +944,7 @@ func DealWithMutateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []Ingest
 		ingestProcessors = DealWithMutateAttributes(attr, ingestProcessors, id)
 	}
 
-	log.Info().Msgf("Length: %d", len(ingestProcessors))
+	// log.Debug().Msgf("Length: %d", len(ingestProcessors))
 
 	return ingestProcessors, onFailureProcessors
 }
@@ -912,7 +952,7 @@ func DealWithMutateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []Ingest
 // Generic function that deal with a single Logstash Plugin by using Template Method Pattern
 func DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 	id := getProcessorID(plugin)
-	log.Info().Msgf("Plugin ID is %s", id)
+	log.Debug().Msgf("Plugin ID is %s", id)
 
 	DealWithPluginFunction, ok := transpilerV2[section][plugin.Name()]
 	if !ok {
