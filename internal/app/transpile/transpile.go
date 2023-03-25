@@ -829,6 +829,7 @@ func DealWithGeoIPV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 func DealWithGrokV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
+	break_on_match := true
 
 	gp := GrokProcessor{
 		Tag: id,
@@ -853,6 +854,9 @@ func DealWithGrokV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 			gp.PatternDefinitions = hashAttributeToMap(attr)
 		case "tag_on_failure":
 			onFailurePorcessors = DealWithTagOnFailure(attr, id)
+		case "break_on_match":
+			break_on_match = getBoolValue(attr)
+
 		default:
 			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
@@ -861,6 +865,10 @@ func DealWithGrokV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 	// Add _grok_parse_failure
 	if len(gp.OnFailure) == 0 {
 		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_grok_parse_failure", ast.DoubleQuoted)), id)
+	}
+	if !break_on_match {
+		log.Warn().Msg("As of now only, break_on_match True is supported.")
+		// TODO? To solve this issue, we would need to create a grok processor for each pattern
 	}
 
 	ingestProcessors = append(ingestProcessors, gp)
