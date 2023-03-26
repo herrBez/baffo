@@ -510,14 +510,15 @@ const (
 	ProcessorContext
 )
 
-func toElasticPipelineSelectorExpression(s string, context int) string {
+func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 	newS := s
 	// Strings of type foo_%{[afield]}
 	field_finder := regexp.MustCompile(`\%\{([^\}]+)\}`)
 	startWithSelector := true
 	firstRun := true
+	matchFound := false
 	for _, m := range field_finder.FindAll([]byte(s), -1) {
-
+		matchFound = true
 		log.Info().Msg(toElasticPipelineSelector(string(m[2 : len(m)-1])))
 		if context == ProcessorContext {
 			newS = strings.Replace(newS, string(m), "{{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}}", 1)
@@ -544,7 +545,7 @@ func toElasticPipelineSelectorExpression(s string, context int) string {
 		newS = "'" + newS
 	}
 
-	return newS
+	return newS, matchFound
 }
 
 func getUniqueOnFailureAddField(id string) string {
@@ -626,7 +627,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 
 			for i := range keys {
 
-				value := toElasticPipelineSelectorExpression(values[i], ProcessorContext)
+				value, _ := toElasticPipelineSelectorExpression(values[i], ProcessorContext)
 
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
@@ -974,20 +975,33 @@ func DealWithCidrV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 		}
 	}
 
-	var b bytes.Buffer
-
-	b.WriteString(fmt.Sprintf(`def cidrs = new CIDR[%d];`, len(networks)))
-	for i, c := range networks {
-		b.WriteString(fmt.Sprintf(`cidrs[%d] = new CIDR('%s');`, i, c))
-	}
 	elastic_addresses := []string{}
+	constant := true
 	for _, a := range addresses {
-		elastic_addresses = append(elastic_addresses, toElasticPipelineSelectorExpression(a, ScriptContext))
+		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, ScriptContext)
+		if matchFound {
+			constant = false
+		}
+
+		elastic_addresses = append(elastic_addresses, transformed_address)
+
 	}
+
+	params := make(map[string]interface{})
+	params["networks"] = networks
+
+	addressOutput := fmt.Sprintf("%s", elastic_addresses)
+	if constant {
+		params["addresses"] = addresses
+		addressOutput = "params.addresses"
+	}
+
+	var b bytes.Buffer
 
 	b.WriteString(
 		fmt.Sprintf(`
-for (c in cidrs) {
+for (n in params.networks) {
+	c = new CIDR(n)
 	for (a in %s) {
 		if (c.contains(a)) {
 			return;
@@ -995,11 +1009,12 @@ for (c in cidrs) {
 	}
 }
 throw new Exception("Could not find CIDR value");
-`, elastic_addresses))
+`, addressOutput))
 
 	ingestProcessors = append(ingestProcessors, ScriptProcessor{
 		Source: getStringPointer(b.String()),
 		Tag:    id,
+		Params: &params,
 	})
 
 	return ingestProcessors, onFailureProcessor
