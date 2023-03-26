@@ -87,19 +87,21 @@ var transpilerV2 = map[string]map[string]TranspileProcessorV2{
 		"kv":        DealWithKVV2,
 		"cidr":      DealWithCidrV2,
 		"geoip":     DealWithGeoIPV2,
+		"translate": DealWithTranslateV2,
 		"useragent": DealWithUserAgentV2,
 	},
 	"output": {},
 }
 
 func transpileBoolExpression(bo ast.BooleanOperator) string {
+	log.Debug().Msg("&&")
 	switch bo.Op {
 	case ast.NoOperator:
 		return ""
 	case ast.And:
-		return " && "
+		return ` && `
 	case ast.Or:
-		return " || "
+		return ` || `
 	default:
 		fmt.Println("Unknown operator")
 		os.Exit(1)
@@ -107,6 +109,7 @@ func transpileBoolExpression(bo ast.BooleanOperator) string {
 		//	case ast.Xor: ""
 		// case ast.Nand:
 	}
+
 	return ""
 }
 
@@ -157,7 +160,7 @@ func transpileCondition(c ast.Condition) string {
 		// if i != 0 && i <= len(c.Expression)-1 {
 		// 	output += ") && ("
 		// }
-		// fmt.Printf("Here %s\n", reflect.TypeOf(expr))
+		log.Debug().Msgf("Here %s %s\n", expr, reflect.TypeOf(expr))
 		switch texpr := expr.(type) {
 
 		case ast.ConditionExpression:
@@ -168,7 +171,11 @@ func transpileCondition(c ast.Condition) string {
 			output = output + "!" + operator_converted + "(" + transpileCondition(texpr.Condition) + ")"
 
 		case ast.NegativeSelectorExpression:
-			output = output + "!" + transpileRvalue(texpr.Selector)
+			operator_converted := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
+
+			selector := transpileRvalue(texpr.Selector)
+
+			output = output + " " + operator_converted + selector + " == null"
 
 		case ast.InExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
@@ -188,14 +195,16 @@ func transpileCondition(c ast.Condition) string {
 
 		case ast.RvalueExpression:
 			bOpComparator := ""
+
 			if texpr.BoolExpression.BoolOperator().Op != ast.NoOperator {
 				bOpComparator = transpileBoolExpression(texpr.BoolExpression.BoolOperator())
 				output = output + bOpComparator + transpileRvalue(texpr.RValue)
-			} else {
+			} else { // No Operator is provided
+
 				output = output + transpileRvalue(texpr.RValue) + " != null"
 			}
 		default:
-			log.Printf("Cannot convert %s %s", reflect.TypeOf(texpr), texpr)
+			log.Warn().Msgf("Cannot convert %s %s", reflect.TypeOf(texpr), texpr)
 		}
 	}
 	return output
@@ -665,7 +674,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 	ingestProcessors = processorsToPipeline(ingestProcessors, fmt.Sprintf("%s-on-success", id), 1)
 
 	for i := range ingestProcessors {
-		log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
+		// log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
 		ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled, false)
 		ingestProcessors[i] = ingestProcessors[i].SetIf(onSuccessCondition, true)
 	}
@@ -1198,6 +1207,87 @@ func DealWithDissectV2(plugin ast.Plugin, id string) ([]IngestProcessor, []Inges
 	}
 
 	ingestProcessors = append(ingestProcessors, proc)
+	return ingestProcessors, onFailureProcessors
+}
+
+func DealWithTranslateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessors := []IngestProcessor{}
+
+	proc := ScriptProcessor{
+		Tag: id,
+	}
+
+	params := make(map[string]interface{})
+
+	var target *string = nil
+	ECSCompatibility := "v8" // We assume ECS Compatibility
+	var dictionary map[string]string = make(map[string]string)
+	var source *string = nil
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		// It is a common field
+		case "tag_on_failure":
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
+		case "destination", "target":
+			target = getStringPointer(getStringAttributeString(attr))
+
+		case "dictionary":
+
+			keys, values := getHashAttributeKeyValue(attr)
+			for i := range keys {
+				dictionary[keys[i]] = values[i]
+			}
+			params["dictionary"] = dictionary
+
+		case "ecs_compatibility":
+			ECSCompatibility = getStringAttributeString(attr)
+
+		case "source":
+			source = getStringPointer(getStringAttributeString(attr))
+
+		case "fallback":
+			params["fallback"] = getStringAttributeString(attr)
+
+		default:
+			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+		}
+	}
+	// Post-Condition: Given that source is mandatory, source variable will always be a string
+
+	if target == nil {
+		if ECSCompatibility == "disabled" {
+			target = getStringPointer("translation")
+		} else {
+			target = source
+		}
+	}
+	// Post-Condition: Translation will always be a string
+
+	proc.Params = &params
+
+	var b bytes.Buffer
+
+	field := toElasticPipelineSelectorCondition(*source)
+
+	b.WriteString(fmt.Sprintf(`def tmp = params.dictionary[%s.toString()];`, field))
+
+	if _, ok := params["fallback"]; ok {
+		b.WriteString(`if (tmp == null) { tmp = params.fallback; }`)
+	}
+
+	fieldToAssign := toElasticPipelineSelector(*target)
+
+	b.WriteString(fmt.Sprintf(`if (tmp != null) { ctx.%s = tmp; }`, fieldToAssign))
+
+	proc.Source = getStringPointer(b.String())
+
+	proc.Description = getStringPointer(fmt.Sprintf("Translate the field '%s' to field '%s'.", toElasticPipelineSelector(*source), toElasticPipelineSelector(*target)))
+
+	log.Warn().Msgf("The Translate script %s produced, assumes: 1. that the target structure is already created.  Consider improving the script to create the structure if not present", id)
+	ingestProcessors = append(ingestProcessors, proc)
+
 	return ingestProcessors, onFailureProcessors
 }
 
