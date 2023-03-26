@@ -62,20 +62,27 @@ func NewIngestPipeline() IngestPipeline {
 // 	return output
 // }
 
-func MyJsonEncoder(m map[string]interface{}) string {
+func MyJsonEncode(v any) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	e := json.NewEncoder(buf)
 
 	e.SetEscapeHTML(false)
 
-	err := e.Encode(m)
+	err := e.Encode(v)
 
 	if err != nil {
 		// Panic
 		log.Panic().Msg("Something wrong in marshalling")
 	}
-	return string(buf.Bytes())
+	return buf.Bytes(), err
+}
+
+func ExtractString(b []byte, err error) string {
+	if err != nil {
+		log.Panic().Msg("Could not marshal")
+	}
+	return string(b)
 }
 
 // Prepend the new If to make sure that the Logstash's original conditions apply first
@@ -100,7 +107,12 @@ func (ingestPipeline IngestPipeline) String() string {
 	if ingestPipeline.OnFailureProcessors != nil {
 		m["on_failure"] = ingestPipeline.OnFailureProcessors
 	}
-	return MyJsonEncoder(m)
+	buf, err := MyJsonEncode(m)
+
+	if err != nil {
+		log.Panic().Msg("Could not marshal")
+	}
+	return string(buf)
 }
 
 type IngestProcessor interface {
@@ -127,8 +139,7 @@ type SetProcessor struct {
 
 func (ip SetProcessor) MarshalJSON() ([]byte, error) {
 	type SetProcessorAlias SetProcessor
-
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]SetProcessorAlias{
 			ip.IngestProcessorType(): (SetProcessorAlias)(ip),
 		},
@@ -137,9 +148,9 @@ func (ip SetProcessor) MarshalJSON() ([]byte, error) {
 
 func StringHelper(ip IngestProcessor) string {
 
-	return MyJsonEncoder(map[string]interface{}{
+	return ExtractString(MyJsonEncode(map[string]interface{}{
 		ip.IngestProcessorType(): ip,
-	})
+	}))
 }
 
 func (sp SetProcessor) String() string {
@@ -233,7 +244,7 @@ func (sp RenameProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 func (ip RenameProcessor) MarshalJSON() ([]byte, error) {
 	type RenameProcessorAlias RenameProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]RenameProcessorAlias{
 			ip.IngestProcessorType(): (RenameProcessorAlias)(ip),
 		},
@@ -282,7 +293,7 @@ func (sp CaseProcessor) SetIf(s *string, append bool) IngestProcessor {
 func (ip CaseProcessor) MarshalJSON() ([]byte, error) {
 	type CaseProcessorAlias CaseProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]CaseProcessorAlias{
 			ip.IngestProcessorType(): (CaseProcessorAlias)(ip),
 		},
@@ -329,7 +340,7 @@ func (sp GrokProcessor) SetIf(s *string, append bool) IngestProcessor {
 func (ip GrokProcessor) MarshalJSON() ([]byte, error) {
 	type GrokProcessorAlias GrokProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]GrokProcessorAlias{
 			ip.IngestProcessorType(): (GrokProcessorAlias)(ip),
 		},
@@ -368,7 +379,7 @@ func (sp AppendProcessor) SetIf(s *string, append bool) IngestProcessor {
 func (ip AppendProcessor) MarshalJSON() ([]byte, error) {
 	type AppendProcessorAlias AppendProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]AppendProcessorAlias{
 			ip.IngestProcessorType(): (AppendProcessorAlias)(ip),
 		},
@@ -418,7 +429,7 @@ func (sp GsubProcessor) SetIf(s *string, append bool) IngestProcessor {
 func (ip GsubProcessor) MarshalJSON() ([]byte, error) {
 	type GsubProcessorAlias GsubProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]GsubProcessorAlias{
 			ip.IngestProcessorType(): (GsubProcessorAlias)(ip),
 		},
@@ -462,7 +473,7 @@ func (sp JoinProcessor) SetIf(s *string, append bool) IngestProcessor {
 func (ip JoinProcessor) MarshalJSON() ([]byte, error) {
 	type JoinProcessorAlias JoinProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]JoinProcessorAlias{
 			ip.IngestProcessorType(): (JoinProcessorAlias)(ip),
 		},
@@ -514,7 +525,7 @@ func (sp KVProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 func (ip KVProcessor) MarshalJSON() ([]byte, error) {
 	type KVProcessorAlias KVProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]KVProcessorAlias{
 			ip.IngestProcessorType(): (KVProcessorAlias)(ip),
 		},
@@ -558,7 +569,7 @@ func (sp DissectProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 func (ip DissectProcessor) MarshalJSON() ([]byte, error) {
 	type DissectProcessorAlias DissectProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]DissectProcessorAlias{
 			ip.IngestProcessorType(): (DissectProcessorAlias)(ip),
 		},
@@ -606,7 +617,7 @@ func (sp DateProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 func (ip DateProcessor) MarshalJSON() ([]byte, error) {
 	type DateProcessorAlias DateProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]DateProcessorAlias{
 			ip.IngestProcessorType(): (DateProcessorAlias)(ip),
 		},
@@ -624,7 +635,7 @@ type DropProcessor struct {
 func (ip DropProcessor) MarshalJSON() ([]byte, error) {
 	type DropProcessorAlias DropProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]DropProcessorAlias{
 			ip.IngestProcessorType(): (DropProcessorAlias)(ip),
 		},
@@ -691,7 +702,7 @@ func (sp SplitProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 func (ip SplitProcessor) MarshalJSON() ([]byte, error) {
 	type SplitProcessorAlias SplitProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]SplitProcessorAlias{
 			ip.IngestProcessorType(): (SplitProcessorAlias)(ip),
 		},
@@ -735,7 +746,7 @@ func (sp TrimProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 func (ip TrimProcessor) MarshalJSON() ([]byte, error) {
 	type TrimProcessorAlias TrimProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]TrimProcessorAlias{
 			ip.IngestProcessorType(): (TrimProcessorAlias)(ip),
 		},
@@ -776,12 +787,9 @@ func (sp PipelineProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 
 func (ip PipelineProcessor) MarshalJSON() ([]byte, error) {
 	type PipelineProcessorAlias PipelineProcessor
-
-	return json.Marshal(
-		map[string]PipelineProcessorAlias{
-			ip.IngestProcessorType(): (PipelineProcessorAlias)(ip),
-		},
-	)
+	return MyJsonEncode(map[string]PipelineProcessorAlias{
+		ip.IngestProcessorType(): (PipelineProcessorAlias)(ip),
+	})
 }
 
 type ScriptProcessor struct {
@@ -821,7 +829,7 @@ func (sp ScriptProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 func (ip ScriptProcessor) MarshalJSON() ([]byte, error) {
 	type ScriptProcessorAlias ScriptProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]ScriptProcessorAlias{
 			ip.IngestProcessorType(): (ScriptProcessorAlias)(ip),
 		},
@@ -876,7 +884,7 @@ func (sp ConvertProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 func (ip ConvertProcessor) MarshalJSON() ([]byte, error) {
 	type ConvertProcessorAlias ConvertProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]ConvertProcessorAlias{
 			ip.IngestProcessorType(): (ConvertProcessorAlias)(ip),
 		},
@@ -900,7 +908,7 @@ type GeoIPProcessor struct {
 func (ip GeoIPProcessor) MarshalJSON() ([]byte, error) {
 	type GeoIPProcessorAlias GeoIPProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]GeoIPProcessorAlias{
 			ip.IngestProcessorType(): (GeoIPProcessorAlias)(ip),
 		},
@@ -946,7 +954,7 @@ type UserAgentProcessor struct {
 func (ip UserAgentProcessor) MarshalJSON() ([]byte, error) {
 	type UserAgentProcessorAlias UserAgentProcessor
 
-	return json.Marshal(
+	return MyJsonEncode(
 		map[string]UserAgentProcessorAlias{
 			ip.IngestProcessorType(): (UserAgentProcessorAlias)(ip),
 		},
