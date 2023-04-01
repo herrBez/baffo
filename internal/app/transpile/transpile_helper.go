@@ -176,9 +176,9 @@ func (sp SetProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 type RemoveProcessor struct {
-	Field         string            `json:"field"`
-	IgnoreMissing bool              `json:"ignore_missing"`
-	Keep          *string           `json:"keep"`
+	Field         *string           `json:"field,omitempty"`
+	IgnoreMissing bool              `json:"ignore_missing,omitempty"`
+	Keep          []string          `json:"keep,omitempty"`
 	Description   *string           `json:"description,omitempty"`
 	If            *string           `json:"if,omitempty"`
 	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
@@ -206,6 +206,16 @@ func (sp RemoveProcessor) SetIf(s *string, append bool) IngestProcessor {
 func (sp RemoveProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 	sp.OnFailure = s
 	return sp
+}
+
+func (ip RemoveProcessor) MarshalJSON() ([]byte, error) {
+	type RemoveProcessorAlias RemoveProcessor
+
+	return MyJsonEncode(
+		map[string]RemoveProcessorAlias{
+			ip.IngestProcessorType(): (RemoveProcessorAlias)(ip),
+		},
+	)
 }
 
 type RenameProcessor struct {
