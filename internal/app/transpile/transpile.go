@@ -89,6 +89,7 @@ var transpilerV2 = map[string]map[string]TranspileProcessorV2{
 		"geoip":     DealWithGeoIPV2,
 		"translate": DealWithTranslateV2,
 		"useragent": DealWithUserAgentV2,
+		"prune":     DealWithPruneV2,
 	},
 	"output": {},
 }
@@ -649,7 +650,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 		case "remove_field":
 			ingestProcessors = append(ingestProcessors,
 				RemoveProcessor{
-					Field: getStringAttributeString(attr),
+					Field: getStringPointer(getStringAttributeString(attr)),
 					Tag:   fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 				},
 			)
@@ -1207,6 +1208,59 @@ func DealWithDissectV2(plugin ast.Plugin, id string) ([]IngestProcessor, []Inges
 	}
 
 	ingestProcessors = append(ingestProcessors, proc)
+	return ingestProcessors, onFailureProcessors
+}
+
+// **Heuristic** to determin if string is probably an regexp (excluding trivial constant strings)
+func isProbablyRegexp(str string) bool {
+	for _, c := range []string{"?", "*", "[", "]", "(", ")", "."} {
+		if strings.Contains(str, c) {
+			return true
+		}
+	}
+	return false
+}
+
+func DealWithPruneV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	log.Warn().Msgf("Support for prune filter is really minimal: Only whitelist_names without regexps are supported")
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessors := []IngestProcessor{}
+
+	var whiteListFields *[]string = nil
+	// var interpolate *bool = nil
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		// It is a common field
+		case "whitelist_names":
+			tmp := getArrayStringAttributes(attr)
+			whiteListFields = &tmp
+		case "interpolate":
+			tmp := getBoolValue(attr)
+			// interpolate = &tmp
+			log.Debug().Msgf("Prune with interpolate %b", tmp)
+		// TODO: case whitelist_values:
+		// TODO: case blacklist_values:
+		// TODO: case blacklist_names:
+		default:
+			log.Error().Msgf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+		}
+	}
+
+	if whiteListFields != nil {
+
+		for _, w := range *whiteListFields {
+			if isProbablyRegexp(w) {
+				log.Error().Msgf("[Plugin %s] WhiteList field '%s' is probably a regexp. It is not supported", plugin.Name(), w)
+			}
+		}
+
+		ingestProcessors = append(ingestProcessors, RemoveProcessor{
+			Keep: *whiteListFields,
+			Tag:  id,
+		})
+	}
+
 	return ingestProcessors, onFailureProcessors
 }
 
