@@ -79,17 +79,18 @@ type TranspileProcessorV2 func(plugin ast.Plugin, id string) ([]IngestProcessor,
 var transpilerV2 = map[string]map[string]TranspileProcessorV2{
 	"input": {},
 	"filter": {
-		"mutate":    DealWithMutateV2,
-		"drop":      DealWithDropV2,
-		"date":      DealWithDateV2,
-		"dissect":   DealWithDissectV2,
-		"grok":      DealWithGrokV2,
-		"kv":        DealWithKVV2,
-		"cidr":      DealWithCidrV2,
-		"geoip":     DealWithGeoIPV2,
-		"translate": DealWithTranslateV2,
-		"useragent": DealWithUserAgentV2,
-		"prune":     DealWithPruneV2,
+		"mutate":     DealWithMutateV2,
+		"drop":       DealWithDropV2,
+		"date":       DealWithDateV2,
+		"dissect":    DealWithDissectV2,
+		"grok":       DealWithGrokV2,
+		"kv":         DealWithKVV2,
+		"cidr":       DealWithCidrV2,
+		"geoip":      DealWithGeoIPV2,
+		"translate":  DealWithTranslateV2,
+		"useragent":  DealWithUserAgentV2,
+		"prune":      DealWithPruneV2,
+		"syslog_pri": DealWithSyslogPriV2,
 	},
 	"output": {},
 }
@@ -580,8 +581,11 @@ func getIfFieldDefined(field string) string {
 		newFieldButLast = newFieldButLast + "." + sf
 		newFieldButLastMaybe = newFieldButLastMaybe + "?." + sf
 	}
-
-	return fmt.Sprintf("%s.containsKey('%s')", newFieldButLastMaybe, splittedField[len(splittedField)-1])
+	if newFieldButLastMaybe == "ctx" {
+		return fmt.Sprintf("ctx.containsKey('%s')", splittedField[len(splittedField)-1])
+	} else {
+		return fmt.Sprintf("%s != null && %s.containsKey('%s')", newFieldButLastMaybe, newFieldButLastMaybe, splittedField[len(splittedField)-1])
+	}
 }
 
 func getIfFieldIsDefinedAndEqualsValue(field string, val *string) string {
@@ -1027,6 +1031,100 @@ throw new Exception("Could not find CIDR value");
 		Params: &params,
 	})
 
+	return ingestProcessors, onFailureProcessor
+}
+
+func DealWithSyslogPriV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessor := []IngestProcessor{}
+	ECSCompatibility := "v8"
+	var field *string = nil
+	useLabels := true
+	facilityLabels := []string{"kernel", "user-level", "mail", "daemon", "security/authorization", "syslogd", "line printer", "network news", "uucp", "clock", "security/authorization", "ftp", "ntp", "log audit", "log alert", "clock", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"}
+	severityLabels := []string{"emergency", "alert", "critical", "error", "warning", "notice", "informational", "debug"}
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		case "ecs_compatibility":
+			ECSCompatibility = getStringAttributeString(attr)
+		case "syslog_pri_field_name":
+			field = getStringPointer(getStringAttributeString(attr))
+		case "severity_labels":
+			severityLabels = getArrayStringAttributes(attr)
+		case "facility_labels":
+			facilityLabels = getArrayStringAttributes(attr)
+		case "use_labels":
+			useLabels = getBoolValue(attr)
+		}
+	}
+
+	if field == nil {
+		if ECSCompatibility == "disabled" {
+			field = getStringPointer("syslog_pri")
+		} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
+			field = getStringPointer("log.syslog.priority")
+		}
+	}
+
+	setValuesString := ""
+
+	log.Warn().Msgf("[Plugin %s] The Ingest processor script assumes that the field pri is already numeric and does not attempt to deal with other types", plugin.Name())
+	extractValue := fmt.Sprintf(`
+int pri = 13;
+if (%s) {
+	pri = %s;
+}
+int severity = pri & 0x7;
+int facility = pri / 8;
+`, getIfFieldDefined(*field), *field)
+
+	if ECSCompatibility == "disabled" {
+		setValuesString = `ctx.syslog_severity_code = severity;
+ctx.syslog_facility_code = facility;
+		`
+	} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
+		setValuesString = `/* Make sure log.syslog.facility, log.syslog.priority are defined Maps */
+if (!ctx.containsKey('log')) {
+	ctx["log"] = [:];
+}
+if (!ctx["log"].containsKey('syslog')) {
+	ctx["log"]["syslog"] = [:];
+}
+if (!ctx["log"]["syslog"].containsKey('facility')) {
+	ctx["log"]["syslog"]["facility"] = [:];
+}
+if (!ctx["log"]["syslog"].containsKey('severity')) {
+	ctx["log"]["syslog"]["severity"] = [:];
+}
+ctx["log"]["syslog"]["severity"]["name"] = params.severity[severity];
+ctx["log"]["syslog"]["severity"]["code"] = severity;
+`
+	}
+
+	useLabelsScript := ""
+	if ECSCompatibility == "disabled" {
+		useLabelsScript = `ctx.syslog_facility_name = params.facility[facility];
+ctx.syslog_severity_name = params.severity[severity];
+		`
+	} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
+		useLabelsScript = `ctx["log"]["syslog"]["facility"]["name"] = params.facility[facility];
+ctx["log"]["syslog"]["facility"]["code"] = facility;`
+	}
+
+	proc := ScriptProcessor{
+		Tag: id,
+	}
+
+	if useLabels {
+		log.Debug().Msgf("UseLabels True")
+		params := make(map[string]interface{})
+		params["facility"] = facilityLabels
+		params["severity"] = severityLabels
+		setValuesString = fmt.Sprintf("%s\n%s", setValuesString, useLabelsScript)
+		proc.Params = &params
+	}
+	proc.Source = getStringPointer(fmt.Sprintf("%s\n%s", extractValue, setValuesString))
+
+	ingestProcessors = append(ingestProcessors, proc)
 	return ingestProcessors, onFailureProcessor
 }
 
