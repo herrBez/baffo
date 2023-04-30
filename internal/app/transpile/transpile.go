@@ -74,23 +74,23 @@ func (f Transpile) Run(args []string) error {
 	return nil
 }
 
-type TranspileProcessorV2 func(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor)
+type TranspileProcessor func(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor)
 
-var transpilerV2 = map[string]map[string]TranspileProcessorV2{
+var transpiler = map[string]map[string]TranspileProcessor{
 	"input": {},
 	"filter": {
-		"mutate":     DealWithMutateV2,
-		"drop":       DealWithDropV2,
-		"date":       DealWithDateV2,
-		"dissect":    DealWithDissectV2,
-		"grok":       DealWithGrokV2,
-		"kv":         DealWithKVV2,
-		"cidr":       DealWithCidrV2,
-		"geoip":      DealWithGeoIPV2,
-		"translate":  DealWithTranslateV2,
-		"useragent":  DealWithUserAgentV2,
-		"prune":      DealWithPruneV2,
-		"syslog_pri": DealWithSyslogPriV2,
+		"mutate":     DealWithMutate,
+		"drop":       DealWithDrop,
+		"date":       DealWithDate,
+		"dissect":    DealWithDissect,
+		"grok":       DealWithGrok,
+		"kv":         DealWithKV,
+		"cidr":       DealWithCidr,
+		"geoip":      DealWithGeoIP,
+		"translate":  DealWithTranslate,
+		"useragent":  DealWithUserAgent,
+		"prune":      DealWithPrune,
+		"syslog_pri": DealWithSyslogPri,
 	},
 	"output": {},
 }
@@ -132,6 +132,7 @@ func toElasticPipelineSelector(sel string) string {
 }
 
 func transpileRvalue(expr ast.Node) string {
+	log.Debug().Msgf("%s %s", expr, reflect.TypeOf(expr))
 	switch texpr := expr.(type) {
 	case ast.StringAttribute:
 		return "\"" + texpr.Value() + "\""
@@ -150,7 +151,6 @@ func transpileRvalue(expr ast.Node) string {
 		return output
 	}
 
-	fmt.Println(reflect.TypeOf(expr))
 	return ""
 
 }
@@ -202,9 +202,9 @@ func transpileCondition(c ast.Condition) string {
 				bOpComparator = transpileBoolExpression(texpr.BoolExpression.BoolOperator())
 				output = output + bOpComparator + transpileRvalue(texpr.RValue)
 			} else { // No Operator is provided
-
 				output = output + transpileRvalue(texpr.RValue) + " != null"
 			}
+
 		default:
 			log.Warn().Msgf("Cannot convert %s %s", reflect.TypeOf(texpr), texpr)
 		}
@@ -688,7 +688,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 
 }
 
-func DealWithDropV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithDrop(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -719,7 +719,7 @@ func DealWithDropV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithDateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithDate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -764,7 +764,7 @@ func DealWithDateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithGeoIPV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithGeoIP(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
 	properties := []string{}
@@ -842,7 +842,7 @@ func DealWithGeoIPV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 	return ingestProcessors, onFailurePorcessors
 }
 
-func DealWithUserAgentV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithUserAgent(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
 
@@ -918,7 +918,7 @@ func DealWithUserAgentV2(plugin ast.Plugin, id string) ([]IngestProcessor, []Ing
 	return ingestProcessors, onFailurePorcessors
 }
 
-func DealWithGrokV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithGrok(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
 	break_on_match := true
@@ -974,7 +974,7 @@ func DealWithGrokV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 //   - 1. A script fails (throws an Exception) if no address matches the CIDR expressions provided
 //   - 2. The onFailureProcessor adds a field _TRANSPILER.<id>
 //   - 3. If the field is not present the onSuccessProcessors are executed
-func DealWithCidrV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithCidr(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessor := []IngestProcessor{}
 	addresses := []string{}
@@ -1034,7 +1034,7 @@ throw new Exception("Could not find CIDR value");
 	return ingestProcessors, onFailureProcessor
 }
 
-func DealWithSyslogPriV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithSyslogPri(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessor := []IngestProcessor{}
 	ECSCompatibility := "v8"
@@ -1128,7 +1128,7 @@ ctx["log"]["syslog"]["facility"]["code"] = facility;`
 	return ingestProcessors, onFailureProcessor
 }
 
-func DealWithMutateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithMutate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -1162,7 +1162,7 @@ func DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) [
 	id := getProcessorID(plugin)
 	log.Debug().Msgf("Plugin ID is %s", id)
 
-	DealWithPluginFunction, ok := transpilerV2[section][plugin.Name()]
+	DealWithPluginFunction, ok := transpiler[section][plugin.Name()]
 	if !ok {
 		log.Warn().Msgf("There is no handler for the %s plugin of type '%s' (with id '%s')\nReturning an empty processors list", section, plugin.Name(), id)
 		return []IngestProcessor{}
@@ -1230,7 +1230,7 @@ func getProcessorID(plugin ast.Plugin) string {
 	return id
 }
 
-func DealWithKVV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithKV(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -1276,7 +1276,7 @@ func DealWithKVV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProc
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithDissectV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithDissect(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -1319,7 +1319,7 @@ func isProbablyRegexp(str string) bool {
 	return false
 }
 
-func DealWithPruneV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithPrune(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	log.Warn().Msgf("Support for prune filter is really minimal: Only whitelist_names without regexps are supported")
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
@@ -1336,7 +1336,7 @@ func DealWithPruneV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 		case "interpolate":
 			tmp := getBoolValue(attr)
 			// interpolate = &tmp
-			log.Debug().Msgf("Prune with interpolate %b", tmp)
+			log.Debug().Msgf("Prune with interpolate %v", tmp)
 		// TODO: case whitelist_values:
 		// TODO: case blacklist_values:
 		// TODO: case blacklist_names:
@@ -1362,7 +1362,7 @@ func DealWithPruneV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithTranslateV2(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+func DealWithTranslate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
