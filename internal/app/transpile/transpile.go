@@ -92,7 +92,9 @@ var transpiler = map[string]map[string]TranspileProcessor{
 		"prune":      DealWithPrune,
 		"syslog_pri": DealWithSyslogPri,
 	},
-	"output": {},
+	"output": {
+		"elasticsearch": DealWithOutputElasticsearch,
+	},
 }
 
 func transpileBoolExpression(bo ast.BooleanOperator) string {
@@ -521,6 +523,8 @@ const (
 	ProcessorContext
 )
 
+// Function that given an expression like "foo_%{[selector]}" returns the equivalent Elastic expression
+// "foo_{{selector}}" and boolean to indicate whether the string depends on input or not
 func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 	newS := s
 	// Strings of type foo_%{[afield]}
@@ -1319,6 +1323,10 @@ func isProbablyRegexp(str string) bool {
 	return false
 }
 
+func DealWithPipelineOutput(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	return []IngestProcessor{}, []IngestProcessor{}
+}
+
 func DealWithPrune(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	log.Warn().Msgf("Support for prune filter is really minimal: Only whitelist_names without regexps are supported")
 	ingestProcessors := []IngestProcessor{}
@@ -1470,6 +1478,27 @@ func transpileConstraint(constraint Constraints) *string {
 	return &converted
 }
 
+// The Elasticsearch Output has a complex logic, we are (as of now) only interested in the pipeline used (if any)
+func DealWithOutputElasticsearch(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessors := []IngestProcessor{}
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		case "pipeline":
+			pipeline, _ := toElasticPipelineSelectorExpression(attr.ValueString(), ProcessorContext)
+			ingestProcessors = append(ingestProcessors, PipelineProcessor{
+				Name: pipeline,
+			})
+
+		default:
+			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+		}
+
+	}
+	return ingestProcessors, onFailureProcessors
+}
+
 func buildIngestPipeline(c ast.Config) {
 	plugin_names := []string{}
 	ip := IngestPipeline{
@@ -1489,6 +1518,7 @@ func buildIngestPipeline(c ast.Config) {
 			// 	f = DealWithMissingTranspiler
 			// }
 			// ip.Processors = append(ip.Processors, f(*c.Plugin(), constraint)...)
+			log.Debug().Msgf(section)
 
 			ip.Processors = append(ip.Processors, DealWithPlugin(section, *c.Plugin(), constraint)...)
 
@@ -1498,6 +1528,9 @@ func buildIngestPipeline(c ast.Config) {
 
 	for _, f := range c.Filter {
 		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("filter"))
+	}
+	for _, f := range c.Output {
+		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"))
 	}
 
 	ips := getAllIngestPipeline(ip)

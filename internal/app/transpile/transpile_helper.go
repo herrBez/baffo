@@ -544,7 +544,7 @@ func (ip KVProcessor) MarshalJSON() ([]byte, error) {
 
 type DissectProcessor struct {
 	Field           string            `json:"field,omitempty"`
-	Pattern         string            `json:"patterns,omitempty"`
+	Pattern         string            `json:"pattern,omitempty"`
 	AppendSeparator *string           `json:"append_separator,omitempty"`
 	IgnoreMissing   bool              `json:"ignore_missing,omitempty"`
 	Description     *string           `json:"description,omitempty"`
