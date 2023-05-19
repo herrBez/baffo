@@ -610,6 +610,16 @@ func getIfFieldIsDefinedAndEqualsValue(field string, val *string) string {
 	return fmt.Sprintf("%s.containsKey('%s') && ctx.%s == %s", newFieldButLastMaybe, splittedField[len(splittedField)-1], field, valString)
 }
 
+func getIfFieldIsDefinedAndEmpty(field string) string {
+	splittedField := strings.Split(field, ".")
+	newFieldButLastMaybe := "ctx"
+
+	for _, sf := range splittedField[:len(splittedField)-1] {
+		newFieldButLastMaybe = newFieldButLastMaybe + "?." + sf
+	}
+	return fmt.Sprintf("%s.containsKey('%s') && ctx.%s.size() == 0", newFieldButLastMaybe, splittedField[len(splittedField)-1], field)
+}
+
 // processorsToPipeline convert a list of processors to a pipeline with name `name` if the length of the list execeeds the `threshold`
 // Otherwise it returns the list as-is
 func processorsToPipeline(ingestProcessors []IngestProcessor, name string, threshold int) []IngestProcessor {
@@ -897,15 +907,25 @@ func DealWithUserAgent(plugin ast.Plugin, id string) ([]IngestProcessor, []Inges
 
 	// Add Warning and Field renaming when ECS Compatibility is disabled
 	if ecs_compatibility == "disabled" {
-		log.Warn().Msg("Disabled ECS_Compatibility is only partially supported. Fields os_name, os_full")
 
-		orig := []string{"os.name", "os.full", "device.name"}
-		dest := []string{"os_name", "os_full", "device"}
+		log.Warn().Msg("Disabled ECS_Compatibility is only partially supported.")
+
+		orig := []string{"os.name", "os.full", "os.version"}
+		dest := []string{"os_name", "os_full", "os_version"}
 
 		prefix := *uap.TargetField
 
 		if len(prefix) > 0 {
 			prefix = prefix + "."
+		}
+
+		if prefix+"original" != uap.Field {
+			// While Elasticsearch copies the original event in the target field, Logstash does not
+			ingestProcessors = append(ingestProcessors, RemoveProcessor{
+				Field:       getStringPointer(prefix + "original"),
+				Description: getStringPointer("When ECS Compatibility is disabled, Logstash does not add a copy of the Field to Target"),
+				Tag:         id + "fix-target-original",
+			})
 		}
 
 		// Strictly Speaking these are onsucessprocessors and should be only executed on success
@@ -915,9 +935,35 @@ func DealWithUserAgent(plugin ast.Plugin, id string) ([]IngestProcessor, []Inges
 				TargetField:   prefix + dest[i],
 				IgnoreFailure: true,
 				IgnoreMissing: true,
-				Tag:           id + "rename",
+				Tag:           id + "-rename-" + orig[i],
 			})
 		}
+		// If prefix + os is empty, remove it
+		ingestProcessors = append(ingestProcessors, RemoveProcessor{
+			Field: getStringPointer(prefix + "os"),
+			If:    getStringPointer(getIfFieldIsDefinedAndEmpty(prefix + "os")),
+			Tag:   id + "-remove-" + prefix + "-os",
+		})
+
+		// Rename the device.name to device (to do so you need first to copy it and remove it)
+		ingestProcessors = append(ingestProcessors, RenameProcessor{
+			Field:       prefix + "device",
+			TargetField: "_TRANSPILE." + id + ".device",
+		})
+		ingestProcessors = append(ingestProcessors, RenameProcessor{
+			TargetField: prefix + "device",
+			Field:       "_TRANSPILE." + id + ".device.name",
+		})
+		// Extract os_major and os_minor from the os_version
+		ingestProcessors = append(ingestProcessors, DissectProcessor{
+			Field:   prefix + "os_version",
+			Pattern: "%{" + prefix + "os_major}.%{" + prefix + "os_minor}",
+		})
+		// Extract the major and minor from the version
+		ingestProcessors = append(ingestProcessors, DissectProcessor{
+			Field:   prefix + "version",
+			Pattern: "%{" + prefix + "major}.%{" + prefix + "minor}",
+		})
 	}
 	return ingestProcessors, onFailurePorcessors
 }
