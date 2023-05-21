@@ -96,6 +96,7 @@ var transpiler = map[string]map[string]TranspileProcessor{
 	},
 	"output": {
 		"elasticsearch": DealWithOutputElasticsearch,
+		"pipeline":      DealWithOutputPipeline,
 	},
 }
 
@@ -262,6 +263,21 @@ func getArrayStringAttributes(attr ast.Attribute) []string {
 			values = append(values, getStringAttributeString(el))
 		}
 
+	default:
+		log.Panic().Msg("I will only an array of strings")
+	}
+	return values
+}
+
+func getArrayStringAttributeOrStringAttrubute(attr ast.Attribute) []string {
+	var values []string
+	switch tattr := attr.(type) {
+	case ast.ArrayAttribute:
+		for _, el := range tattr.Attributes {
+			values = append(values, getStringAttributeString(el))
+		}
+	case ast.StringAttribute:
+		values = append(values, getStringAttributeString(attr))
 	default:
 		log.Panic().Msg("I will only an array of strings")
 	}
@@ -1371,8 +1387,26 @@ func isProbablyRegexp(str string) bool {
 	return false
 }
 
-func DealWithPipelineOutput(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
-	return []IngestProcessor{}, []IngestProcessor{}
+func DealWithOutputPipeline(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessors := []IngestProcessor{}
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		case "send_to":
+			pipelines := getArrayStringAttributeOrStringAttrubute(attr)
+			for _, p := range pipelines {
+				ingestProcessors = append(ingestProcessors, PipelineProcessor{
+					Name: p,
+				})
+			}
+
+		default:
+			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+		}
+
+	}
+	return ingestProcessors, onFailureProcessors
 }
 
 func DealWithPrune(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
