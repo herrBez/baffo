@@ -2,6 +2,7 @@ package transpile
 
 import (
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ func (f Transpile) Run(args []string) error {
 		stat, err := os.Stat(filename)
 		if err != nil {
 			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			continue
 		}
 		if stat.IsDir() {
 			continue
@@ -61,7 +63,7 @@ func (f Transpile) Run(args []string) error {
 			var tree ast.Config = res.(ast.Config)
 			// log.Println(reflect.TypeOf(tree))
 
-			buildIngestPipeline(tree)
+			buildIngestPipeline(filename, tree)
 
 		}
 	}
@@ -1545,11 +1547,12 @@ func DealWithOutputElasticsearch(plugin ast.Plugin, id string) ([]IngestProcesso
 	return ingestProcessors, onFailureProcessors
 }
 
-func buildIngestPipeline(c ast.Config) {
+func buildIngestPipeline(filename string, c ast.Config) {
 	plugin_names := []string{}
+	fname := path.Base(filename)
 	ip := IngestPipeline{
-		Name:                "main-pipeline",
-		Description:         "",
+		Name:                fmt.Sprintf("main-pipeline-%s", fname[:len(fname)-len(path.Ext(fname))]),
+		Description:         fmt.Sprintf("Main Pipeline for the file '%s'", filename),
 		Processors:          []IngestProcessor{},
 		OnFailureProcessors: nil,
 	}
