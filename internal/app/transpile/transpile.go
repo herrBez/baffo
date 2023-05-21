@@ -26,6 +26,8 @@ import (
 	"math/rand"
 )
 
+const TRANSPILER_PREFIX = "_TRANSPILER"
+
 type Transpile struct{}
 
 func New() Transpile {
@@ -585,7 +587,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 }
 
 func getUniqueOnFailureAddField(id string) string {
-	return "_TRANSPILER." + id
+	return fmt.Sprintf("%s.%s", TRANSPILER_PREFIX, id)
 }
 
 func getTranspilerOnFailureProcessor(id string) IngestProcessor {
@@ -969,21 +971,39 @@ func DealWithUserAgent(plugin ast.Plugin, id string) ([]IngestProcessor, []Inges
 		// Rename the device.name to device (to do so you need first to copy it and remove it)
 		ingestProcessors = append(ingestProcessors, RenameProcessor{
 			Field:       prefix + "device",
-			TargetField: "_TRANSPILE." + id + ".device",
+			TargetField: fmt.Sprintf("%s.%s.device", TRANSPILER_PREFIX, id),
 		})
 		ingestProcessors = append(ingestProcessors, RenameProcessor{
 			TargetField: prefix + "device",
-			Field:       "_TRANSPILE." + id + ".device.name",
+			Field:       fmt.Sprintf("%s.%s.device.name", TRANSPILER_PREFIX, id),
 		})
-		// Extract os_major and os_minor from the os_version
-		ingestProcessors = append(ingestProcessors, DissectProcessor{
-			Field:   prefix + "os_version",
-			Pattern: "%{" + prefix + "os_major}.%{" + prefix + "os_minor}",
+		// Extract os_major, os_minor and os_patch from the os_version
+		// An alternative approach is to use two dissect filter (once to match the complete major.minor.patch and if it fails major.minor)
+		ingestProcessors = append(ingestProcessors, GrokProcessor{
+			Field: prefix + "os_version",
+			Patterns: []string{
+				fmt.Sprintf("^%%{ALL_BUT_DOT:%sos_major}\\.%%{ALL_BUT_DOT:%sos_minor}(\\.%%{ALL_BUT_DOT:%sos_patch})?", prefix, prefix, prefix),
+			},
+			PatternDefinitions: map[string]string{
+				"ALL_BUT_DOT": "[^\\.]+",
+			},
 		})
-		// Extract the major and minor from the version
-		ingestProcessors = append(ingestProcessors, DissectProcessor{
-			Field:   prefix + "version",
-			Pattern: "%{" + prefix + "major}.%{" + prefix + "minor}",
+
+		// Extract major, minor and patch from the version
+		// An alternative approach is to use two dissect filter (once to match the complete major.minor.patch and if it fails major.minor)
+		ingestProcessors = append(ingestProcessors, GrokProcessor{
+			Field: prefix + "version",
+			Patterns: []string{
+				fmt.Sprintf("^%%{ALL_BUT_DOT:%smajor}\\.%%{ALL_BUT_DOT:%sminor}(\\.%%{ALL_BUT_DOT:%spatch})?", prefix, prefix, prefix),
+			},
+			PatternDefinitions: map[string]string{
+				"ALL_BUT_DOT": "[^\\.]+",
+			},
+		})
+
+		ingestProcessors = append(ingestProcessors, SetProcessor{
+			CopyFrom: prefix + "os_name",
+			Field:    prefix + "os",
 		})
 	}
 	return ingestProcessors, onFailurePorcessors
