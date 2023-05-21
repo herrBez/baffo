@@ -36,6 +36,7 @@ func (f Transpile) Run(args []string) error {
 	logger := ecszerolog.New(os.Stderr)
 	log.Logger = logger
 	var result *multierror.Error
+	ips := []IngestPipeline{}
 
 	for _, filename := range args {
 		stat, err := os.Stat(filename)
@@ -63,10 +64,12 @@ func (f Transpile) Run(args []string) error {
 			var tree ast.Config = res.(ast.Config)
 			// log.Println(reflect.TypeOf(tree))
 
-			buildIngestPipeline(filename, tree)
+			ips = append(ips, buildIngestPipeline(filename, tree)...)
 
 		}
 	}
+
+	printPipeline(ips)
 
 	if result != nil {
 		result.ErrorFormat = format.MultiErr
@@ -646,7 +649,7 @@ func processorsToPipeline(ingestProcessors []IngestProcessor, name string, thres
 	} else {
 		return []IngestProcessor{
 			PipelineProcessor{
-				Pipeline: IngestPipeline{
+				Pipeline: &IngestPipeline{
 					Name:                name,
 					Processors:          ingestProcessors,
 					OnFailureProcessors: nil,
@@ -1581,7 +1584,7 @@ func DealWithOutputElasticsearch(plugin ast.Plugin, id string) ([]IngestProcesso
 	return ingestProcessors, onFailureProcessors
 }
 
-func buildIngestPipeline(filename string, c ast.Config) {
+func buildIngestPipeline(filename string, c ast.Config) []IngestPipeline {
 	plugin_names := []string{}
 	fname := path.Base(filename)
 	ip := IngestPipeline{
@@ -1618,6 +1621,13 @@ func buildIngestPipeline(filename string, c ast.Config) {
 
 	ips := getAllIngestPipeline(ip)
 
+	log.Debug().Msgf("Pipeline generated %d", len(ips))
+
+	return ips
+
+}
+
+func printPipeline(ips []IngestPipeline) {
 	fmt.Printf("{")
 	for i, pipeline := range ips {
 		fmt.Printf("\"%s\": %s ", pipeline.Name, pipeline)
@@ -1626,7 +1636,6 @@ func buildIngestPipeline(filename string, c ast.Config) {
 		}
 	}
 	fmt.Printf("}")
-
 }
 
 func getAllIngestPipeline(main IngestPipeline) []IngestPipeline {
@@ -1638,7 +1647,9 @@ func getAllIngestPipeline(main IngestPipeline) []IngestPipeline {
 	for _, ip := range processors {
 		switch typedIp := ip.(type) {
 		case PipelineProcessor:
-			ingestPipelines = append(ingestPipelines, getAllIngestPipeline(typedIp.Pipeline)...)
+			if typedIp.Pipeline != nil {
+				ingestPipelines = append(ingestPipelines, getAllIngestPipeline(*typedIp.Pipeline)...)
+			}
 		}
 	}
 	return ingestPipelines

@@ -764,7 +764,7 @@ func (ip TrimProcessor) MarshalJSON() ([]byte, error) {
 }
 
 type PipelineProcessor struct {
-	Pipeline              IngestPipeline    `json:"-"`
+	Pipeline              *IngestPipeline   `json:"-"`
 	Name                  string            `json:"name"`
 	IgnoreMissingPipeline *bool             `json:"ignore_missing_pipeline,omitempty"`
 	Description           *string           `json:"description,omitempty"`
