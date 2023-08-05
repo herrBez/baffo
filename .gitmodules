@@ -1,0 +1,3 @@
+[submodule "logstash-transpiler-testsuite"]
+	path = logstash-transpiler-testsuite
+	url = git@github.com:herrBez/logstash-transpiler-testsuite.git
