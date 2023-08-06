@@ -96,6 +96,7 @@ var transpiler = map[string]map[string]TranspileProcessor{
 		"geoip":      DealWithGeoIP,
 		"translate":  DealWithTranslate,
 		"useragent":  DealWithUserAgent,
+		"urldecode":  DealWithURLDecode,
 		"prune":      DealWithPrune,
 		"syslog_pri": DealWithSyslogPri,
 	},
@@ -1055,6 +1056,42 @@ func DealWithGrok(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProc
 	}
 
 	ingestProcessors = append(ingestProcessors, gp)
+	return ingestProcessors, onFailurePorcessors
+}
+
+func DealWithURLDecode(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailurePorcessors := []IngestProcessor{}
+
+	udp := URLDecodeProcessor{
+		Tag: id,
+	}
+
+	for _, attr := range plugin.Attributes {
+		if Contains(CommonAttributes, attr.Name()) {
+			continue
+		}
+		switch attr.Name() {
+		// It is a common field
+
+		case "all_fields":
+			allFields := getBoolValue(attr)
+			if allFields {
+				log.Warn().Msgf("URL Decoding all fields is not supported yet. Consider contributing :).")
+			}
+		case "field":
+			udp.Field = getStringAttributeString(attr)
+		default:
+			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
+
+		}
+	}
+	// Add _grok_parse_failure
+	if len(udp.OnFailure) == 0 {
+		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_url_decode_field", ast.DoubleQuoted)), id)
+	}
+
+	ingestProcessors = append(ingestProcessors, udp)
 	return ingestProcessors, onFailurePorcessors
 }
 

@@ -992,3 +992,46 @@ func (sp UserAgentProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
 	sp.OnFailure = s
 	return sp
 }
+
+type URLDecodeProcessor struct {
+	Field         string            `json:"field"`
+	TargetField   *string           `json:"target_field,omitempty"`
+	IgnoreMissing *bool             `json:"ignore_missing,omitempty"`
+	Description   *string           `json:"description,omitempty"`
+	If            *string           `json:"if,omitempty"`
+	IgnoreFailure bool              `json:"ignore_failure,omitempty"`
+	Tag           string            `json:"tag"`
+	OnFailure     []IngestProcessor `json:"on_failure,omitempty"`
+}
+
+func (ip URLDecodeProcessor) MarshalJSON() ([]byte, error) {
+	type URLDecodeProcessorAlias URLDecodeProcessor
+
+	return MyJsonEncode(
+		map[string]URLDecodeProcessorAlias{
+			ip.IngestProcessorType(): (URLDecodeProcessorAlias)(ip),
+		},
+	)
+}
+
+func (sp URLDecodeProcessor) String() string {
+	return StringHelper(sp)
+}
+
+func (sp URLDecodeProcessor) IngestProcessorType() string {
+	return "user_agent"
+}
+
+func (sp URLDecodeProcessor) SetIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
+	return sp
+}
+
+func (sp URLDecodeProcessor) SetOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
