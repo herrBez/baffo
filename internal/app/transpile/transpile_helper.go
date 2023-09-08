@@ -607,7 +607,7 @@ func (ap DateProcessor) String() string {
 }
 
 func (ap DateProcessor) IngestProcessorType() string {
-	return "dissect"
+	return "date"
 }
 
 func (sp DateProcessor) SetIf(s *string, append bool) IngestProcessor {
