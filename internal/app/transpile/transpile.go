@@ -28,13 +28,17 @@ import (
 
 const TRANSPILER_PREFIX = "_TRANSPILER"
 
-type Transpile struct{}
-
-func New() Transpile {
-	return Transpile{}
+type Transpile struct{
+	threshold int
 }
 
-func (f Transpile) Run(args []string) error {
+func New(threshold int) Transpile {
+	return Transpile{
+		threshold: threshold,
+	}
+}
+
+func (t Transpile) Run(args []string) error {
 	logger := ecszerolog.New(os.Stderr)
 	log.Logger = logger
 	var result *multierror.Error
@@ -66,7 +70,7 @@ func (f Transpile) Run(args []string) error {
 			var tree ast.Config = res.(ast.Config)
 			// log.Println(reflect.TypeOf(tree))
 
-			ips = append(ips, buildIngestPipeline(filename, tree)...)
+			ips = append(ips, t.buildIngestPipeline(filename, tree)...)
 
 		}
 	}
@@ -714,7 +718,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 		}
 	}
 
-	ingestProcessors = processorsToPipeline(ingestProcessors, fmt.Sprintf("%s-on-success", id), 1)
+	ingestProcessors = processorsToPipeline(ingestProcessors, fmt.Sprintf("%s-on-success", id), threshold)
 
 	for i := range ingestProcessors {
 		// log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
@@ -786,7 +790,7 @@ func DealWithDate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProc
 			matchArray := getArrayStringAttributes(attr)
 			proc.Field = matchArray[0]
 			proc.Formats = matchArray[1:]
-
+			
 		default:
 			log.Printf("Attribute '%s' is currently not supported", attr.Name())
 
@@ -794,7 +798,7 @@ func DealWithDate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProc
 	}
 	// Add _kv_filter_error
 	if len(onFailureProcessors) == 0 {
-		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_data_parse_failure", ast.DoubleQuoted)), id)
+		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_date_parse_failure", ast.DoubleQuoted)), id)
 	}
 
 	ingestProcessors = append(ingestProcessors, proc)
@@ -1286,7 +1290,7 @@ func DealWithMutate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestPr
 }
 
 // Generic function that deal with a single Logstash Plugin by using Template Method Pattern
-func DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) []IngestProcessor {
+func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) []IngestProcessor {
 	id := getProcessorID(plugin)
 	log.Debug().Msgf("Plugin ID is %s", id)
 
@@ -1298,7 +1302,7 @@ func DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) [
 
 	constraintTranspiled := transpileConstraint(constraint)
 
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraintTranspiled, id, 1)
+	onSuccessProcessors := DealWithCommonAttributes(plugin, constraintTranspiled, id, t.threshold)
 
 	noncommonattrs := []ast.Attribute{}
 
@@ -1328,7 +1332,7 @@ func DealWithPlugin(section string, plugin ast.Plugin, constraint Constraints) [
 
 	// To keep a similar semantics as Logstash we create an additional pipeline
 	// If we have more than one Processor that has been created by the plugin-specific function
-	ingestProcessors = processorsToPipeline(ingestProcessors, id, 1)
+	ingestProcessors = processorsToPipeline(ingestProcessors, id, t.threshold)
 
 	for i := range ingestProcessors {
 		ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled, true)
@@ -1641,7 +1645,7 @@ func DealWithOutputElasticsearch(plugin ast.Plugin, id string) ([]IngestProcesso
 	return ingestProcessors, onFailureProcessors
 }
 
-func buildIngestPipeline(filename string, c ast.Config) []IngestPipeline {
+func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPipeline {
 	plugin_names := []string{}
 	fname := path.Base(filename)
 	ip := IngestPipeline{
@@ -1663,7 +1667,7 @@ func buildIngestPipeline(filename string, c ast.Config) []IngestPipeline {
 			// ip.Processors = append(ip.Processors, f(*c.Plugin(), constraint)...)
 			log.Debug().Msgf(section)
 
-			ip.Processors = append(ip.Processors, DealWithPlugin(section, *c.Plugin(), constraint)...)
+			ip.Processors = append(ip.Processors, t.DealWithPlugin(section, *c.Plugin(), constraint)...)
 
 			plugin_names = append(plugin_names, c.Plugin().Name())
 		}

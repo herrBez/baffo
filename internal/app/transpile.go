@@ -14,10 +14,13 @@ func makeTranspileCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 
+	cmd.Flags().Int("pipeline_threshold", 1, "determine how many processors will cause the creation of a new pipeline in conditions")
+
 	return cmd
 }
 
 func runTranspile(cmd *cobra.Command, args []string) error {
-	check := transpile.New()
+	threshold, _ := cmd.Flags().GetInt("pipeline_threshold")
+	check := transpile.New(threshold)
 	return check.Run(args)
 }
