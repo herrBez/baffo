@@ -59,12 +59,19 @@ func (l Lint) Run(args []string) error {
 		for i := range conf.Input {
 			astutil.ApplyPlugins(conf.Input[i].BranchOrPlugins, v.walk)
 		}
+		conf.Input = []ast.PluginSection{}
+
 		for i := range conf.Filter {
 			astutil.ApplyPlugins(conf.Filter[i].BranchOrPlugins, v.walk)
 		}
+
+
+		
+
 		for i := range conf.Output {
 			astutil.ApplyPlugins(conf.Output[i].BranchOrPlugins, v.walk)
 		}
+		conf.Output = []ast.PluginSection{}
 
 		if len(v.noIDs) > 0 {
 			errMsg := strings.Builder{}
@@ -127,7 +134,9 @@ func (v *validator) walk(c *astutil.Cursor) {
 			v.changed = true
 
 			plugin := c.Plugin()
-			plugin.Attributes = append(plugin.Attributes, ast.NewStringAttribute("id", fmt.Sprintf("%s-%d", c.Plugin().Name(), v.count), ast.DoubleQuoted))
+			// plugin.Attributes = append(plugin.Attributes, ast.NewStringAttribute("id", fmt.Sprintf("%s-%d", c.Plugin().Name(), v.count), ast.DoubleQuoted))
+
+			// plugin.Attributes = append(plugin.Attributes, ast.NewStringAttribute("id", fmt.Sprintf("%s", c.Plugin().Name()), ast.DoubleQuoted))
 
 			c.Replace(plugin)
 		} else {

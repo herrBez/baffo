@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.elastic.co/ecszerolog"
 
@@ -30,17 +30,30 @@ const TRANSPILER_PREFIX = "_TRANSPILER"
 
 type Transpile struct{
 	threshold int
+	log_level zerolog.Level
 }
 
-func New(threshold int) Transpile {
+func New(threshold int, log_level string) Transpile {
 	return Transpile{
 		threshold: threshold,
+		log_level: level[strings.ToLower(log_level)],
 	}
+}
+
+var level = map[string]zerolog.Level {
+	"info": zerolog.InfoLevel,
+	"information": zerolog.InfoLevel,
+	"warn": zerolog.WarnLevel,
+	"warning": zerolog.WarnLevel,
+	"debug": zerolog.DebugLevel,
+	"error": zerolog.ErrorLevel,
 }
 
 func (t Transpile) Run(args []string) error {
 	logger := ecszerolog.New(os.Stderr)
 	log.Logger = logger
+	zerolog.SetGlobalLevel(t.log_level)
+
 	var result *multierror.Error
 	ips := []IngestPipeline{}
 
@@ -790,7 +803,7 @@ func DealWithDate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProc
 			matchArray := getArrayStringAttributes(attr)
 			proc.Field = matchArray[0]
 			proc.Formats = matchArray[1:]
-			
+
 		default:
 			log.Printf("Attribute '%s' is currently not supported", attr.Name())
 
@@ -903,8 +916,8 @@ func DealWithUserAgent(plugin ast.Plugin, id string) ([]IngestProcessor, []Inges
 
 		case "lru_cache_size":
 			log.Info().Msg(`
-				[useragent filter plugin] The attribute 'lru_cache_size' is set in Logstash. 
-				Elasticsearch support a per-node setting 'ingest.user_agent.cache_size'. 
+				[useragent filter plugin] The attribute 'lru_cache_size' is set in Logstash.
+				Elasticsearch support a per-node setting 'ingest.user_agent.cache_size'.
 				More details can be found in the documentation https://www.elastic.co/guide/en/elasticsearch/reference/current/user-agent-processor.html#ingest-user-agent-settings
 			`)
 
