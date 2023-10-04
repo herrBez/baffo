@@ -159,6 +159,8 @@ func toElasticPipelineSelector(sel string) string {
 	return sel
 }
 
+
+
 func transpileRvalue(expr ast.Node) string {
 	log.Debug().Msgf("%s %s", expr, reflect.TypeOf(expr))
 	switch texpr := expr.(type) {
@@ -562,6 +564,7 @@ var CommonAttributes = []string{"add_field", "remove_field", "add_tag", "id", "e
 const (
 	ScriptContext = iota
 	ProcessorContext
+	DissectContext
 )
 
 // Function that given an expression like "foo_%{[selector]}" returns the equivalent Elastic expression
@@ -594,6 +597,10 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 				fieldValue = fieldValue + " + '"
 			}
 			newS = strings.Replace(newS, string(m), fieldValue, 1)
+		} else if context == DissectContext {
+			// TODO Deal with modifiers regexp.MustCompile("(+|->|\\*|/[0-9]|?|&)")
+
+			newS = strings.Replace(newS, string(m), "%{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}", 1)
 		}
 	}
 
@@ -1421,6 +1428,7 @@ func DealWithKV(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProces
 	return ingestProcessors, onFailureProcessors
 }
 
+
 func DealWithDissect(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
@@ -1440,7 +1448,7 @@ func DealWithDissect(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 				log.Printf("[Pos %s][Plugin %s] Attribute '%s' only one map is supported. Consider splitting the original in two dissect filters", plugin.Pos(), plugin.Name(), attr.Name())
 			}
 			proc.Field = keys[0]
-			proc.Pattern = values[0]
+			proc.Pattern, _ = toElasticPipelineSelectorExpression(values[0], DissectContext)
 		default:
 			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
