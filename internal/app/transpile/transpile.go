@@ -1571,7 +1571,7 @@ func DealWithTranslate(plugin ast.Plugin, id string) ([]IngestProcessor, []Inges
 		case "ecs_compatibility":
 			ECSCompatibility = getStringAttributeString(attr)
 
-		case "source":
+		case "field", "source":
 			source = getStringPointer(getStringAttributeString(attr))
 
 		case "fallback":
