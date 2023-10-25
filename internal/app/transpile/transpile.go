@@ -565,6 +565,7 @@ const (
 	ScriptContext = iota
 	ProcessorContext
 	DissectContext
+	GrokContext
 )
 
 // Function that given an expression like "foo_%{[selector]}" returns the equivalent Elastic expression
@@ -598,9 +599,50 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 			}
 			newS = strings.Replace(newS, string(m), fieldValue, 1)
 		} else if context == DissectContext {
-			// TODO Deal with modifiers regexp.MustCompile("(+|->|\\*|/[0-9]|?|&)")
+			// Deal With the Optional Prefix Modifer (i.e., +, ?, *)
+			dissectPrefixModifierFinder := regexp.MustCompile(`\%\{(\+|\?|\*)?(.*)\}`)
 
-			newS = strings.Replace(newS, string(m), "%{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}", 1)
+			rawPrefix := dissectPrefixModifierFinder.FindSubmatch(m)
+
+			prefix := string(rawPrefix[1])
+			field := string(rawPrefix[2])
+			suffix := ""
+
+
+			// Deal with the Optional Dissect Modifiers
+			dissectSuffixModifierFinder := regexp.MustCompile(`(.*)(\->|/\d)+$`)
+
+			rawSuffix := dissectSuffixModifierFinder.FindSubmatch(rawPrefix[2])
+
+			if len(rawSuffix) > 0 {
+				field = string(rawSuffix[1])
+				suffix = string(rawSuffix[2])
+			}
+
+
+			newS = strings.Replace(newS, string(m), "%{" + prefix + toElasticPipelineSelector(string(field)[0:len(field)]) + suffix + "}", 1)
+
+		} else if context == GrokContext {
+			// We can assume there are no other closing parenthesis
+			grokPartsFinder := regexp.MustCompile(`\%\{([^:]+)(:[^:]+)?(:[^:]+)?\}`)
+
+			rawGrokParts := grokPartsFinder.FindSubmatch(m)
+
+			pattern := string(m)
+			fieldName := ""
+			convert := ""
+
+
+			pattern = string(rawGrokParts[1])
+			if len(rawGrokParts[2]) > 0 {
+				fieldName = ":" + toElasticPipelineSelector(string(rawGrokParts[2])[1:])
+			}
+			if len(rawGrokParts[3]) > 0 {
+				convert = string(rawGrokParts[3]) // TODO: Check if this is necessary
+			}
+
+			newS = strings.Replace(newS, string(m), "%{" + pattern + fieldName + convert + "}", 1)
+
 		}
 	}
 
