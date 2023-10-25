@@ -422,7 +422,7 @@ else {
 					CaseProcessor{
 						Type:        attr.Name(), // either uppercase or lowercase
 						Description: getStringPointer(fmt.Sprintf("'%s' field '%s'", attr.Name(), field)),
-						Field:       getStringAttributeString(el),
+						Field:       toElasticPipelineSelector(field),
 						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
 					})
 			}

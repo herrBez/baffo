@@ -265,7 +265,7 @@ func (ip RenameProcessor) MarshalJSON() ([]byte, error) {
 type CaseProcessor struct {
 	Type          string            `json:"-"` // The field is only used internally to distinguish lowercase/uppercase
 	Field         string            `json:"field"`
-	TargetField   string            `json:"target_field"`
+	TargetField   *string           `json:"target_field,omitempty"`
 	IgnoreMissing bool              `json:"ignore_missing,omitempty"`
 	Description   *string           `json:"description,omitempty"`
 	If            *string           `json:"if,omitempty"`
