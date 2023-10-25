@@ -850,7 +850,7 @@ func DealWithDate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProc
 
 		case "match":
 			matchArray := getArrayStringAttributes(attr)
-			proc.Field = matchArray[0]
+			proc.Field = toElasticPipelineSelector(matchArray[0])
 			proc.Formats = matchArray[1:]
 
 		default:
