@@ -1090,12 +1090,15 @@ func DealWithGrok(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProc
 			continue
 		}
 		switch attr.Name() {
-		// It is a common field
 		case "match":
-			helpPattern := hashAttributeToMapArray(attr)
+			helpPatterns := hashAttributeToMapArray(attr)
 			// TODO: Deal with multiple keys, currently only the last is used
-			for key := range helpPattern {
-				gp.Patterns = helpPattern[key]
+			for key := range helpPatterns {
+				gp.Field = key
+				gp.Patterns = helpPatterns[key]
+				for i, _ := range gp.Patterns {
+					gp.Patterns[i], _ = toElasticPipelineSelectorExpression(gp.Patterns[i], GrokContext)
+				}
 			}
 
 		case "ecs_compatibility":
