@@ -16,6 +16,8 @@ func makeTranspileCmd() *cobra.Command {
 
 	cmd.Flags().Int("pipeline_threshold", 1, "determine how many processors will cause the creation of a new pipeline in conditions")
 	cmd.Flags().String("log_level", "info", "determine the log_level")
+	cmd.Flags().Bool("deal_with_error_locally", true, "whether we deal with errors locally, e.g., add tag on error by default")
+	cmd.Flags().Bool("add_default_global_on_failure", false, "whether to add a default global on failure")
 
 	return cmd
 }
@@ -23,6 +25,8 @@ func makeTranspileCmd() *cobra.Command {
 func runTranspile(cmd *cobra.Command, args []string) error {
 	threshold, _ := cmd.Flags().GetInt("pipeline_threshold")
 	log_level, _ := cmd.Flags().GetString("log_level")
-	check := transpile.New(threshold, log_level)
+	deal_with_error_locally, _ := cmd.Flags().GetBool("deal_with_error_locally")
+	add_default_global_on_failure, _ := cmd.Flags().GetBool("add_default_global_on_failure")
+	check := transpile.New(threshold, log_level, deal_with_error_locally, add_default_global_on_failure)
 	return check.Run(args)
 }
