@@ -1480,6 +1480,8 @@ func DealWithDissect(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestP
 
 	proc := DissectProcessor{
 		Tag: id,
+		// Dissect in Logstash always add a space in the appended information
+		AppendSeparator: getStringPointer(" "),
 	}
 
 	for _, attr := range plugin.Attributes {
