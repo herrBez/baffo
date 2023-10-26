@@ -450,7 +450,7 @@ else {
 				ingestProcessors = append(ingestProcessors,
 					GsubProcessor{
 						Description: getStringPointer(fmt.Sprintf("Field '%s': substitute '%s' with '%s'", gsubexpression[i], gsubexpression[i+1], gsubexpression[i+2])),
-						Field:       gsubexpression[i],
+						Field:       toElasticPipelineSelector(gsubexpression[i]),
 						Pattern:     gsubexpression[i+1],
 						Replacement: gsubexpression[i+2],
 						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
