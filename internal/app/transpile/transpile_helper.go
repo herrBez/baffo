@@ -127,9 +127,59 @@ type IngestProcessor interface {
 
 type CommonFields struct {
 	If          *string           `json:"if,omitempty"`
-	Tag         *string           `json:"tag"`
+	Tag         *string           `json:"tag,omitempty"`
 	OnFailure   []IngestProcessor `json:"on_failure,omitempty"`
 	Description *string           `json:"description,omitempty"`
+}
+
+type CF interface {
+	GetTag() *string
+	GetTagOrDefault(string) string
+	GetDescription() *string
+	GetDescriptionOrDefault(string) string
+	GetOnFailure() []IngestProcessor
+	GetIf() *string
+	GetIfOrDefault(string) string
+}
+
+func (cf CommonFields) GetIf() *string {
+	return cf.If
+}
+
+func (cf CommonFields) GetIfOrDefault(str string) string {
+	if cf.If != nil {
+		return *cf.If
+	} else {
+		return str
+	}
+}
+
+func (cf CommonFields) GetOnFailure() []IngestProcessor {
+	return cf.OnFailure
+}
+
+func (cf CommonFields) GetTag() *string {
+	return cf.Tag
+}
+
+func (cf CommonFields) GetTagOrDefault(str string) string {
+	if cf.Tag != nil {
+		return *cf.Tag
+	} else {
+		return str
+	}
+}
+
+func (cf CommonFields) GetDescription() *string {
+	return cf.Description
+}
+
+func (cf CommonFields) GetDescriptionOrDefault(str string) string {
+	if cf.Description != nil {
+		return *cf.Description
+	} else {
+		return str
+	}
 }
 
 type SetProcessor struct {

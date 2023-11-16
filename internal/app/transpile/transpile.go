@@ -900,7 +900,7 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 				Field:        gp.Field,
 				DatabaseFile: getStringPointer("GeoLite2-ASN.mmdb"),
 				Properties:   &asn_properties,
-			}.WithTag(id + "asn").(GeoIPProcessor) // TODO: Add getTag function
+			}.WithTag(gp.GetTagOrDefault("") + "asn").(GeoIPProcessor)
 
 			if gp.TargetField != nil {
 				gp_asn.TargetField = getStringPointer(*gp.TargetField + ".as")
