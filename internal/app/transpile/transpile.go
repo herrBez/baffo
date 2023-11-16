@@ -367,10 +367,8 @@ func DealWithMutateAttributes(attr ast.Attribute, ingestProcessors []IngestProce
 else {
   throw new Exception("Cannot capitalize something that is not a string")
 }*/`, field, field, field, field, field, field, field)),
-				Description: getStringPointer(fmt.Sprintf("Capitalize field '%s'", field)),
-				Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				If:          getStringPointer(getIfFieldDefined(field)),
-			})
+			}.WithIf(getStringPointer(getIfFieldDefined(field)), false).
+				WithDescription(fmt.Sprintf("Capitalize field '%s'", field)))
 		}
 
 	case "convert":
@@ -381,11 +379,9 @@ else {
 				log.Warn().Msgf("Mutate Convert to type '%s' semantics may be different in Elasticsearch Convert Processor", values[i])
 			}
 			ingestProcessors = append(ingestProcessors, ConvertProcessor{
-				Description: getStringPointer(fmt.Sprintf("Convert field '%s' to '%s'", keys[i], values[i])),
-				Field:       keys[i],
-				Type:        LogstashConvertToConvertProcessorType[values[i]],
-				Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-			})
+				Field: keys[i],
+				Type:  LogstashConvertToConvertProcessorType[values[i]],
+			}.WithDescription(fmt.Sprintf("Convert field '%s' to '%s'", keys[i], values[i])))
 		}
 
 	// It is a common field
@@ -396,11 +392,9 @@ else {
 			targetField := toElasticPipelineSelector(values[i])
 			ingestProcessors = append(ingestProcessors,
 				RenameProcessor{
-					Description: getStringPointer(fmt.Sprintf("Rename field '%s' to '%s'", keys[i], targetField)),
 					TargetField: targetField,
 					Field:       keys[i],
-					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				})
+				}.WithDescription(fmt.Sprintf("Rename field '%s' to '%s'", keys[i], targetField)))
 		}
 	case "copy":
 		keys, values := getHashAttributeKeyValue(attr)
@@ -409,11 +403,9 @@ else {
 
 			ingestProcessors = append(ingestProcessors,
 				SetProcessor{
-					Description: getStringPointer(fmt.Sprintf("Copy value of field '%s' in field '%s'", keys[i], values[i])),
-					CopyFrom:    keys[i],
-					Field:       values[i],
-					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				})
+					CopyFrom: keys[i],
+					Field:    values[i],
+				}.WithDescription(fmt.Sprintf("Copy value of field '%s' in field '%s'", keys[i], values[i])))
 		}
 	case "uppercase", "lowercase":
 		// Assuming only the field
@@ -423,11 +415,9 @@ else {
 				field := getStringAttributeString(el)
 				ingestProcessors = append(ingestProcessors,
 					CaseProcessor{
-						Type:        attr.Name(), // either uppercase or lowercase
-						Description: getStringPointer(fmt.Sprintf("'%s' field '%s'", attr.Name(), field)),
-						Field:       toElasticPipelineSelector(field),
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
+						Type:  attr.Name(), // either uppercase or lowercase
+						Field: toElasticPipelineSelector(field),
+					}.WithDescription(fmt.Sprintf("'%s' field '%s'", attr.Name(), field)))
 			}
 
 		default: // uppercase/lowercase require an Array
@@ -448,12 +438,10 @@ else {
 			for i := 0; i < len(gsubexpression); i += 3 {
 				ingestProcessors = append(ingestProcessors,
 					GsubProcessor{
-						Description: getStringPointer(fmt.Sprintf("Field '%s': substitute '%s' with '%s'", gsubexpression[i], gsubexpression[i+1], gsubexpression[i+2])),
 						Field:       toElasticPipelineSelector(gsubexpression[i]),
 						Pattern:     gsubexpression[i+1],
 						Replacement: gsubexpression[i+2],
-						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-					})
+					}.WithDescription(fmt.Sprintf("Field '%s': substitute '%s' with '%s'", gsubexpression[i], gsubexpression[i+1], gsubexpression[i+2])))
 			}
 		}
 
@@ -463,23 +451,19 @@ else {
 		for i := range keys {
 			ingestProcessors = append(ingestProcessors,
 				JoinProcessor{
-					Description:   getStringPointer(fmt.Sprintf("Join array '%s' with separator '%s'", keys[i], values[i])),
 					Separator:     values[i],
 					Field:         keys[i],
 					IgnoreFailure: false,
-					Tag:           fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				})
+				}.WithDescription(fmt.Sprintf("Join array '%s' with separator '%s'", keys[i], values[i])))
 		}
 	case "split":
 		keys, values := getHashAttributeKeyValue(attr)
 		for i := range keys {
 			ingestProcessors = append(ingestProcessors,
 				SplitProcessor{
-					Description: getStringPointer(fmt.Sprintf("Split field '%s' with separator '%s'", keys[i], values[i])),
-					Separator:   values[i],
-					Field:       keys[i],
-					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				})
+					Separator: values[i],
+					Field:     keys[i],
+				}.WithDescription(fmt.Sprintf("Join array '%s' with separator '%s'", keys[i], values[i])))
 		}
 
 	case "strip":
@@ -490,10 +474,8 @@ else {
 
 			ingestProcessors = append(ingestProcessors,
 				TrimProcessor{
-					Description: getStringPointer(fmt.Sprintf("Trim field '%s'", elasticField)),
-					Field:       elasticField,
-					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				},
+					Field: elasticField,
+				}.WithDescription(fmt.Sprintf("Trim field '%s'", elasticField)),
 			)
 
 		}
@@ -512,12 +494,11 @@ else {
 			// }
 			ingestProcessors = append(ingestProcessors,
 				SetProcessor{
-					Description: getStringPointer(fmt.Sprintf("Set field '%s' to value '%s' if null", keys[i], values[i])),
-					If:          getStringPointer(field_is_null),
-					Value:       values[i],
-					Field:       keys[i],
-					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				})
+					Value: values[i],
+					Field: keys[i],
+				}.WithIf(getStringPointer(field_is_null), true).
+					WithDescription(fmt.Sprintf("Set field '%s' to value '%s' if null", keys[i], values[i])),
+			)
 		}
 
 	case "replace":
@@ -525,12 +506,10 @@ else {
 		for i := range keys {
 			ingestProcessors = append(ingestProcessors,
 				SetProcessor{
-					Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
-					Value:       values[i],
-					Field:       keys[i],
-					Override:    true,
-					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				})
+					Value:    values[i],
+					Field:    keys[i],
+					Override: true,
+				}.WithDescription(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])))
 		}
 
 	case "update":
@@ -538,18 +517,22 @@ else {
 		for i := range keys {
 			ingestProcessors = append(ingestProcessors,
 				SetProcessor{
-					Description: getStringPointer(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])),
-					Value:       values[i],
-					Field:       keys[i],
-					Override:    true,
-					Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
-				})
+					Value:    values[i],
+					Field:    keys[i],
+					Override: true,
+				}.WithDescription(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])))
 		}
 
 	default:
 		log.Printf("Mutate of type '%s' not supported", attr.Name())
 
 	}
+
+	// Add Tags to all created processors
+	for i := range ingestProcessors {
+		ingestProcessors[i] = ingestProcessors[i].WithTag(fmt.Sprintf("%s-%d", id, len(ingestProcessors)))
+	}
+
 	return ingestProcessors
 }
 
@@ -561,11 +544,9 @@ func DealWithTagOnFailure(attr ast.Attribute, id string, t Transpile) []IngestPr
 		return []IngestProcessor{}
 	}
 	return []IngestProcessor{AppendProcessor{
-		Tag:         fmt.Sprintf("append-tag-%s", id),
-		Description: getStringPointer("Append Tag on Failure"),
-		Field:       "tags",
-		Value:       getArrayStringAttributes(attr),
-	}}
+		Field: "tags",
+		Value: getArrayStringAttributes(attr),
+	}.WithDescription("Append Tag on Failure").WithTag(fmt.Sprintf("append-tag-%s", id))}
 }
 
 var CommonAttributes = []string{"add_field", "remove_field", "add_tag", "id", "enable_metric", "periodic_flush", "remove_tag"}
@@ -667,8 +648,7 @@ func getTranspilerOnFailureProcessor(id string) IngestProcessor {
 	return SetProcessor{
 		Field: getUniqueOnFailureAddField(id),
 		Value: "Processor {{ _ingest.on_failure_processor_type }} with tag {{ _ingest.on_failure_processor_tag }} in pipeline {{ _ingest.on_failure_pipeline }} failed with message {{ _ingest.on_failure_message }}",
-		Tag:   getUniqueOnFailureAddField(id),
-	}
+	}.WithTag(getUniqueOnFailureAddField(id))
 }
 
 func getIfFieldDefined(field string) string {
@@ -755,31 +735,26 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
-						Description: getStringPointer(fmt.Sprintf("On Success of %s, add field '%s' with value '%s'", id, keys[i], value)),
-						Value:       value,
-						Field:       keys[i],
-						Tag:         fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
-					})
+						Value: value,
+						Field: keys[i],
+					}.WithDescription(fmt.Sprintf("On Success of %s, add field '%s' with value '%s'", id, keys[i], value)),
+				)
 			}
 		case "remove_field":
 			ingestProcessors = append(ingestProcessors,
 				RemoveProcessor{
 					Field: getStringPointer(getStringAttributeString(attr)),
-					Tag:   fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 				},
 			)
 		case "add_tag":
 			ingestProcessors = append(ingestProcessors,
 				AppendProcessor{
-					Tag:   fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)),
 					Field: "tags",
 					Value: getArrayStringAttributes(attr),
 				},
 			)
-		case "id": // Already Added
 		case "enable_metric", "periodic_flush": // N/A
 
-		// case "remove_tag": // Not Supported
 		default:
 			log.Printf("Remove Tag (%s) is not yet supported", attr.Name())
 
@@ -790,8 +765,9 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 
 	for i := range ingestProcessors {
 		// log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
-		ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled, false)
-		ingestProcessors[i] = ingestProcessors[i].SetIf(onSuccessCondition, true)
+		ingestProcessors[i] = ingestProcessors[i].WithIf(constraintTranspiled, false)
+		ingestProcessors[i] = ingestProcessors[i].WithIf(onSuccessCondition, true)
+		ingestProcessors[i] = ingestProcessors[i].WithTag(fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)))
 	}
 
 	return ingestProcessors
@@ -802,9 +778,7 @@ func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
-	proc := DropProcessor{
-		Tag: id,
-	}
+	proc := DropProcessor{}.WithTag(id)
 
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
@@ -815,7 +789,7 @@ func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 				log.Info().Msgf("Percentage %d", value)
 				// TODO Add seed?
 				// TODO Make sure that random number is generated only on need
-				proc = proc.SetIf(getStringPointer(fmt.Sprintf("new Random().nextInt(100) < %d", value)), true).(DropProcessor)
+				proc = proc.WithIf(getStringPointer(fmt.Sprintf("new Random().nextInt(100) < %d", value)), true).(DropProcessor)
 			}
 		// Add if condition
 
@@ -833,9 +807,7 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
-	proc := DateProcessor{
-		Tag: id,
-	}
+	proc := DateProcessor{}.WithTag(id).(DateProcessor)
 
 	for _, attr := range plugin.Attributes {
 		if Contains(CommonAttributes, attr.Name()) {
@@ -879,9 +851,7 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 	onFailurePorcessors := []IngestProcessor{}
 	properties := []string{}
 
-	gp := GeoIPProcessor{
-		Tag: id,
-	}
+	gp := GeoIPProcessor{}.WithTag(id).(GeoIPProcessor)
 
 	// TODO Add all properties
 	for _, attr := range plugin.Attributes {
@@ -927,11 +897,11 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 		}
 		if len(asn_properties) > 0 {
 			gp_asn := GeoIPProcessor{
-				Tag:          gp.Tag + "asn",
 				Field:        gp.Field,
 				DatabaseFile: getStringPointer("GeoLite2-ASN.mmdb"),
 				Properties:   &asn_properties,
-			}
+			}.WithTag(id + "asn").(GeoIPProcessor) // TODO: Add getTag function
+
 			if gp.TargetField != nil {
 				gp_asn.TargetField = getStringPointer(*gp.TargetField + ".as")
 			}
@@ -939,10 +909,9 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 		}
 		if len(other_properties) > 0 {
 			gp_other := GeoIPProcessor{
-				Tag:        gp.Tag,
 				Field:      gp.Field,
 				Properties: &other_properties,
-			}
+			}.WithTag(id).(GeoIPProcessor)
 			if gp.TargetField != nil {
 				gp_other.TargetField = getStringPointer(*gp.TargetField + ".geo")
 			}
@@ -958,9 +927,7 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 
 	ecs_compatibility := "v8"
 
-	uap := UserAgentProcessor{
-		Tag: id,
-	}
+	uap := UserAgentProcessor{}.WithTag(id).(UserAgentProcessor)
 
 	// TODO Add all properties
 	for _, attr := range plugin.Attributes {
@@ -1018,10 +985,8 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 		if prefix+"original" != uap.Field {
 			// While Elasticsearch copies the original event in the target field, Logstash does not
 			ingestProcessors = append(ingestProcessors, RemoveProcessor{
-				Field:       getStringPointer(prefix + "original"),
-				Description: getStringPointer("When ECS Compatibility is disabled, Logstash does not add a copy of the Field to Target"),
-				Tag:         id + "fix-target-original",
-			})
+				Field: getStringPointer(prefix + "original"),
+			}.WithTag(id+"fix-target-original").WithDescription("When ECS Compatibility is disabled, Logstash does not add a copy of the Field to Target"))
 		}
 
 		// Strictly Speaking these are onsucessprocessors and should be only executed on success
@@ -1031,15 +996,15 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 				TargetField:   prefix + dest[i],
 				IgnoreFailure: true,
 				IgnoreMissing: true,
-				Tag:           id + "-rename-" + orig[i],
-			})
+			}.WithTag(id+"-rename-"+orig[i]))
 		}
 		// If prefix + os is empty, remove it
 		ingestProcessors = append(ingestProcessors, RemoveProcessor{
 			Field: getStringPointer(prefix + "os"),
-			If:    getStringPointer(getIfFieldIsDefinedAndEmpty(prefix + "os")),
-			Tag:   id + "-remove-" + prefix + "-os",
-		})
+		}.
+			WithTag(id+"-remove-"+prefix+"-os").
+			WithIf(getStringPointer(getIfFieldIsDefinedAndEmpty(prefix+"os")), true),
+		)
 
 		// Rename the device.name to device (to do so you need first to copy it and remove it)
 		ingestProcessors = append(ingestProcessors, RenameProcessor{
@@ -1087,9 +1052,7 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	onFailurePorcessors := []IngestProcessor{}
 	break_on_match := true
 
-	gp := GrokProcessor{
-		Tag: id,
-	}
+	gp := GrokProcessor{}.WithTag(id).(GrokProcessor)
 
 	for _, attr := range plugin.Attributes {
 		if Contains(CommonAttributes, attr.Name()) {
@@ -1138,9 +1101,7 @@ func DealWithURLDecode(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
 
-	udp := URLDecodeProcessor{
-		Tag: id,
-	}
+	udp := URLDecodeProcessor{}.WithTag(id).(URLDecodeProcessor)
 
 	for _, attr := range plugin.Attributes {
 		if Contains(CommonAttributes, attr.Name()) {
@@ -1230,9 +1191,8 @@ throw new Exception("Could not find CIDR value");
 
 	ingestProcessors = append(ingestProcessors, ScriptProcessor{
 		Source: getStringPointer(b.String()),
-		Tag:    id,
 		Params: &params,
-	})
+	}.WithTag(id))
 
 	return ingestProcessors, onFailureProcessor
 }
@@ -1313,9 +1273,7 @@ ctx.syslog_severity_name = params.severity[severity];
 ctx["log"]["syslog"]["facility"]["code"] = facility;`
 	}
 
-	proc := ScriptProcessor{
-		Tag: id,
-	}
+	proc := ScriptProcessor{}.WithTag(id).(ScriptProcessor)
 
 	if useLabels {
 		log.Debug().Msgf("UseLabels True")
@@ -1397,7 +1355,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	// In this case we are always in the "OnSuccess" case, thus we can simplify the condition
 	if len(ingestProcessors) == 0 { // There are only unsupported or the common attributes
 		for i := range onSuccessProcessors {
-			onSuccessProcessors[i] = onSuccessProcessors[i].SetIf(constraintTranspiled, false)
+			onSuccessProcessors[i] = onSuccessProcessors[i].WithIf(constraintTranspiled, false)
 		}
 	}
 
@@ -1406,8 +1364,8 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	ingestProcessors = processorsToPipeline(ingestProcessors, id, t.threshold)
 
 	for i := range ingestProcessors {
-		ingestProcessors[i] = ingestProcessors[i].SetIf(constraintTranspiled, true)
-		ingestProcessors[i] = ingestProcessors[i].SetOnFailure(onFailureProcessors)
+		ingestProcessors[i] = ingestProcessors[i].WithIf(constraintTranspiled, true)
+		ingestProcessors[i] = ingestProcessors[i].WithOnFailure(onFailureProcessors)
 	}
 
 	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
@@ -1438,10 +1396,9 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 	onFailureProcessors := []IngestProcessor{}
 
 	kv := KVProcessor{
-		Tag:        id,
 		FieldSplit: " ",       // Default value in Logstash
 		Field:      "message", // Default value in Logstash
-	}
+	}.WithTag(id).(KVProcessor)
 
 	for _, attr := range plugin.Attributes {
 		if Contains(CommonAttributes, attr.Name()) {
@@ -1484,10 +1441,9 @@ func DealWithDissect(plugin ast.Plugin, id string, t Transpile) ([]IngestProcess
 	onFailureProcessors := []IngestProcessor{}
 
 	proc := DissectProcessor{
-		Tag: id,
 		// Dissect in Logstash always add a space in the appended information
 		AppendSeparator: getStringPointer(" "),
-	}
+	}.WithTag(id).(DissectProcessor)
 
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
@@ -1582,8 +1538,7 @@ func DealWithPrune(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 
 		ingestProcessors = append(ingestProcessors, RemoveProcessor{
 			Keep: *whiteListFields,
-			Tag:  id,
-		})
+		}.WithTag(id))
 	}
 
 	return ingestProcessors, onFailureProcessors
@@ -1593,9 +1548,7 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
-	proc := ScriptProcessor{
-		Tag: id,
-	}
+	proc := ScriptProcessor{}.WithTag(id).(ScriptProcessor)
 
 	params := make(map[string]interface{})
 
