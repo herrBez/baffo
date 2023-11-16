@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.elastic.co/ecszerolog"
@@ -29,29 +28,25 @@ import (
 
 const TRANSPILER_PREFIX = "_TRANSPILER"
 
-type Transpile struct {
-	threshold                 int
-	log_level                 zerolog.Level
-	deal_with_error_locally   bool
-	addDefaultGlobalOnFailure bool
+type Transpile struct{
+	threshold int
+	log_level zerolog.Level
 }
 
-func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool) Transpile {
+func New(threshold int, log_level string) Transpile {
 	return Transpile{
-		threshold:                 threshold,
-		log_level:                 level[strings.ToLower(log_level)],
-		deal_with_error_locally:   deal_with_error_locally,
-		addDefaultGlobalOnFailure: addDefaultGlobalOnFailure,
+		threshold: threshold,
+		log_level: level[strings.ToLower(log_level)],
 	}
 }
 
-var level = map[string]zerolog.Level{
-	"info":        zerolog.InfoLevel,
+var level = map[string]zerolog.Level {
+	"info": zerolog.InfoLevel,
 	"information": zerolog.InfoLevel,
-	"warn":        zerolog.WarnLevel,
-	"warning":     zerolog.WarnLevel,
-	"debug":       zerolog.DebugLevel,
-	"error":       zerolog.ErrorLevel,
+	"warn": zerolog.WarnLevel,
+	"warning": zerolog.WarnLevel,
+	"debug": zerolog.DebugLevel,
+	"error": zerolog.ErrorLevel,
 }
 
 func (t Transpile) Run(args []string) error {
@@ -103,7 +98,7 @@ func (t Transpile) Run(args []string) error {
 	return nil
 }
 
-type TranspileProcessor func(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor)
+type TranspileProcessor func(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor)
 
 var transpiler = map[string]map[string]TranspileProcessor{
 	"input": {},
@@ -163,6 +158,8 @@ func toElasticPipelineSelector(sel string) string {
 	}
 	return sel
 }
+
+
 
 func transpileRvalue(expr ast.Node) string {
 	log.Debug().Msgf("%s %s", expr, reflect.TypeOf(expr))
@@ -449,7 +446,7 @@ else {
 				ingestProcessors = append(ingestProcessors,
 					GsubProcessor{
 						Description: getStringPointer(fmt.Sprintf("Field '%s': substitute '%s' with '%s'", gsubexpression[i], gsubexpression[i+1], gsubexpression[i+2])),
-						Field:       toElasticPipelineSelector(gsubexpression[i]),
+						Field:       gsubexpression[i],
 						Pattern:     gsubexpression[i+1],
 						Replacement: gsubexpression[i+2],
 						Tag:         fmt.Sprintf("%s-%d", id, len(ingestProcessors)),
@@ -553,12 +550,10 @@ else {
 	return ingestProcessors
 }
 
-func DealWithTagOnFailure(attr ast.Attribute, id string, t Transpile) []IngestProcessor {
-	// We deliberately ignore the tag_on_failure when the option is deactivate
-	// The assumption is that a global processor will deal with this
-	// Use the default value to keep the Logstash's behavior
-	if !t.deal_with_error_locally {
-		return []IngestProcessor{}
+func DealWithTagOnFailure(attr ast.Attribute, id string) []IngestProcessor {
+	dealWithErrorLocally := false
+	if !dealWithErrorLocally {
+		return nil
 	}
 	return []IngestProcessor{AppendProcessor{
 		Tag:         fmt.Sprintf("append-tag-%s", id),
@@ -617,6 +612,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 			field := string(rawPrefix[2])
 			suffix := ""
 
+
 			// Deal with the Optional Dissect Modifiers
 			dissectSuffixModifierFinder := regexp.MustCompile(`(.*)(\->|/\d)+$`)
 
@@ -627,7 +623,8 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 				suffix = string(rawSuffix[2])
 			}
 
-			newS = strings.Replace(newS, string(m), "%{"+prefix+toElasticPipelineSelector(string(field)[0:len(field)])+suffix+"}", 1)
+
+			newS = strings.Replace(newS, string(m), "%{" + prefix + toElasticPipelineSelector(string(field)[0:len(field)]) + suffix + "}", 1)
 
 		} else if context == GrokContext {
 			// We can assume there are no other closing parenthesis
@@ -639,6 +636,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 			fieldName := ""
 			convert := ""
 
+
 			pattern = string(rawGrokParts[1])
 			if len(rawGrokParts[2]) > 0 {
 				fieldName = ":" + toElasticPipelineSelector(string(rawGrokParts[2])[1:])
@@ -647,7 +645,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 				convert = string(rawGrokParts[3]) // TODO: Check if this is necessary
 			}
 
-			newS = strings.Replace(newS, string(m), "%{"+pattern+fieldName+convert+"}", 1)
+			newS = strings.Replace(newS, string(m), "%{" + pattern + fieldName + convert + "}", 1)
 
 		}
 	}
@@ -798,7 +796,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 
 }
 
-func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithDrop(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -829,7 +827,7 @@ func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithDate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -844,7 +842,7 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		switch attr.Name() {
 		// It is a common field
 		case "tag_on_failure":
-			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
 		case "target":
 			proc.TargetField = getStringPointer(getStringAttributeString(attr))
 		case "locale":
@@ -866,7 +864,7 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	}
 	// Add _kv_filter_error
 	if len(onFailureProcessors) == 0 {
-		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_date_parse_failure", ast.DoubleQuoted)), id, t)
+		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_date_parse_failure", ast.DoubleQuoted)), id)
 	}
 
 	ingestProcessors = append(ingestProcessors, proc)
@@ -874,7 +872,7 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithGeoIP(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
 	properties := []string{}
@@ -896,7 +894,7 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 			gp.TargetField = getStringPointer(toElasticPipelineSelector(getStringAttributeString(attr)))
 
 		case "tag_on_failure":
-			onFailurePorcessors = DealWithTagOnFailure(attr, id, t)
+			onFailurePorcessors = DealWithTagOnFailure(attr, id)
 
 		default:
 			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
@@ -906,7 +904,7 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 
 	// Add _grok_parse_failure
 	if len(gp.OnFailure) == 0 {
-		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_geoip_lookup_failure", ast.DoubleQuoted)), id, t)
+		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_geoip_lookup_failure", ast.DoubleQuoted)), id)
 	}
 
 	// Fields are defined
@@ -952,7 +950,7 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 	return ingestProcessors, onFailurePorcessors
 }
 
-func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithUserAgent(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
 
@@ -1082,7 +1080,7 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	return ingestProcessors, onFailurePorcessors
 }
 
-func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithGrok(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
 	break_on_match := true
@@ -1112,7 +1110,7 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		case "pattern_definitions":
 			gp.PatternDefinitions = hashAttributeToMap(attr)
 		case "tag_on_failure":
-			onFailurePorcessors = DealWithTagOnFailure(attr, id, t)
+			onFailurePorcessors = DealWithTagOnFailure(attr, id)
 		case "break_on_match":
 			break_on_match = getBoolValue(attr)
 
@@ -1123,7 +1121,7 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	}
 	// Add _grok_parse_failure
 	if len(gp.OnFailure) == 0 {
-		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_grok_parse_failure", ast.DoubleQuoted)), id, t)
+		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_grok_parse_failure", ast.DoubleQuoted)), id)
 	}
 	if !break_on_match {
 		log.Warn().Msg("As of now only, break_on_match True is supported.")
@@ -1134,7 +1132,7 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	return ingestProcessors, onFailurePorcessors
 }
 
-func DealWithURLDecode(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithURLDecode(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailurePorcessors := []IngestProcessor{}
 
@@ -1163,7 +1161,7 @@ func DealWithURLDecode(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	}
 	// Add _grok_parse_failure
 	if len(udp.OnFailure) == 0 {
-		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_url_decode_field", ast.DoubleQuoted)), id, t)
+		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_url_decode_field", ast.DoubleQuoted)), id)
 	}
 
 	ingestProcessors = append(ingestProcessors, udp)
@@ -1177,7 +1175,7 @@ func DealWithURLDecode(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 //   - 1. A script fails (throws an Exception) if no address matches the CIDR expressions provided
 //   - 2. The onFailureProcessor adds a field _TRANSPILER.<id>
 //   - 3. If the field is not present the onSuccessProcessors are executed
-func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithCidr(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessor := []IngestProcessor{}
 	addresses := []string{}
@@ -1237,7 +1235,7 @@ throw new Exception("Could not find CIDR value");
 	return ingestProcessors, onFailureProcessor
 }
 
-func DealWithSyslogPri(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithSyslogPri(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessor := []IngestProcessor{}
 	ECSCompatibility := "v8"
@@ -1331,20 +1329,20 @@ ctx["log"]["syslog"]["facility"]["code"] = facility;`
 	return ingestProcessors, onFailureProcessor
 }
 
-func DealWithMutate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithMutate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
 		case "tag_on_failure":
-			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
 		}
 	}
 
 	// Add default value for Tag_on_failure
 	if len(onFailureProcessors) == 0 {
-		onFailureProcessors = append(onFailureProcessors, DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_mutate_error", ast.DoubleQuoted)), id, t)...)
+		onFailureProcessors = append(onFailureProcessors, DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_mutate_error", ast.DoubleQuoted)), id)...)
 	}
 
 	// Extract the attributes
@@ -1386,7 +1384,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	// PA is a Plugin with only Plugin-Specific attributes (no id, no add_field etc.)
 	pa := ast.NewPlugin(plugin.Name(), noncommonattrs...)
 
-	ingestProcessors, onFailureProcessors := DealWithPluginFunction(pa, id, t)
+	ingestProcessors, onFailureProcessors := DealWithPluginFunction(pa, id)
 
 	// On Success Processors should be executed only when no Failure happened
 	if len(onSuccessProcessors) > 0 {
@@ -1433,7 +1431,7 @@ func getProcessorID(plugin ast.Plugin) string {
 	return id
 }
 
-func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithKV(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -1450,7 +1448,7 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 		switch attr.Name() {
 		// It is a common field
 		case "tag_on_failure":
-			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
 		case "target":
 			kv.TargetField = getStringPointer(getStringAttributeString(attr))
 		case "prefix":
@@ -1472,14 +1470,15 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 	}
 	// Add _kv_filter_error
 	if len(kv.OnFailure) == 0 {
-		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_kv_filter_error", ast.DoubleQuoted)), id, t)
+		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_kv_filter_error", ast.DoubleQuoted)), id)
 	}
 	ingestProcessors = append(ingestProcessors, kv)
 
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithDissect(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+
+func DealWithDissect(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -1493,7 +1492,7 @@ func DealWithDissect(plugin ast.Plugin, id string, t Transpile) ([]IngestProcess
 		switch attr.Name() {
 		// It is a common field
 		case "tag_on_failure":
-			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
 		case "mapping":
 			keys, values := getHashAttributeKeyValue(attr)
 			if len(keys) != 1 {
@@ -1507,7 +1506,7 @@ func DealWithDissect(plugin ast.Plugin, id string, t Transpile) ([]IngestProcess
 	}
 	// Add dissect failure default tag
 	if len(proc.OnFailure) == 0 {
-		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_dissectfailure", ast.DoubleQuoted)), id, t)
+		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_dissectfailure", ast.DoubleQuoted)), id)
 	}
 
 	ingestProcessors = append(ingestProcessors, proc)
@@ -1524,7 +1523,7 @@ func isProbablyRegexp(str string) bool {
 	return false
 }
 
-func DealWithOutputPipeline(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithOutputPipeline(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -1546,7 +1545,7 @@ func DealWithOutputPipeline(plugin ast.Plugin, id string, t Transpile) ([]Ingest
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithPrune(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithPrune(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	log.Warn().Msgf("Support for prune filter is really minimal: Only whitelist_names without regexps are supported")
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
@@ -1589,7 +1588,7 @@ func DealWithPrune(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 	return ingestProcessors, onFailureProcessors
 }
 
-func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithTranslate(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -1608,7 +1607,7 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 		switch attr.Name() {
 		// It is a common field
 		case "tag_on_failure":
-			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
+			onFailureProcessors = DealWithTagOnFailure(attr, id)
 		case "destination", "target":
 			target = getStringPointer(getStringAttributeString(attr))
 
@@ -1698,7 +1697,7 @@ func transpileConstraint(constraint Constraints) *string {
 }
 
 // The Elasticsearch Output has a complex logic, we are (as of now) only interested in the pipeline used (if any)
-func DealWithOutputElasticsearch(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+func DealWithOutputElasticsearch(plugin ast.Plugin, id string) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
@@ -1718,33 +1717,16 @@ func DealWithOutputElasticsearch(plugin ast.Plugin, id string, t Transpile) ([]I
 	return ingestProcessors, onFailureProcessors
 }
 
-func getDefaultTranspilerOnFailureProcessor() []IngestProcessor {
-	return []IngestProcessor{
-		SetProcessor{
-			Field: "error.message",
-			Value: "Processor {{ _ingest.on_failure_processor_type }} with tag {{ _ingest.on_failure_processor_tag }} in pipeline {{ _ingest.on_failure_pipeline }} failed with message {{ _ingest.on_failure_message }}",
-		},
-		AppendProcessor{
-			Field: "event.kind",
-			Value: []string{"pipeline_error"},
-		},
-	}
-}
-
 func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPipeline {
 	plugin_names := []string{}
 	fname := path.Base(filename)
 	ip := IngestPipeline{
-		Name:                fmt.Sprintf("main-pipeline-%s", fname[:len(fname)-len(path.Ext(fname))]),
-		Description:         fmt.Sprintf("Main Pipeline for the file '%s'", filename),
+		Name:                fmt.Sprintf("%s", fname[:len(fname)-len(path.Ext(fname))]),
+		// Name:                fmt.Sprintf("main-pipeline-%s", fname[:len(fname)-len(path.Ext(fname))]),
+		// Description:         fmt.Sprintf("Main Pipeline for the file '%s'", filename),
 		Processors:          []IngestProcessor{},
 		OnFailureProcessors: nil,
 	}
-
-	if t.addDefaultGlobalOnFailure {
-		ip.OnFailureProcessors = getDefaultTranspilerOnFailureProcessor()
-	}
-
 	// apply func returns an ApplyPluginsFuncCondition object depending on the section
 	applyFunc := func(section string) ApplyPluginsFuncCondition {
 		return func(c *Cursor, constraint Constraints) {
