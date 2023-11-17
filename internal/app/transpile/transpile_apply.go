@@ -42,14 +42,14 @@ func MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPlugins
 			}
 
 			elseCondition = ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.IfBlock.Condition))
-			elseConstraint = NewConstraint(false, elseCondition)
+			elseConstraint = NewConstraint(elseCondition)
 
-			MyIteration(block.IfBlock.Block, AddCondToConstraint(constraint, false, block.IfBlock.Condition), applyPluginsFunc)
+			MyIteration(block.IfBlock.Block, AddCondToConstraint(constraint, block.IfBlock.Condition), applyPluginsFunc)
 
 			for i := range block.ElseIfBlock {
 				elseConstraint.Conditions = append(elseConstraint.Conditions, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.ElseIfBlock[i].Condition)))
 
-				MyIteration(block.ElseIfBlock[i].Block, AddCondToConstraint(constraint, false, block.ElseIfBlock[i].Condition), applyPluginsFunc)
+				MyIteration(block.ElseIfBlock[i].Block, AddCondToConstraint(constraint, block.ElseIfBlock[i].Condition), applyPluginsFunc)
 			}
 
 			MyIteration(block.ElseBlock.Block, elseConstraint, applyPluginsFunc)

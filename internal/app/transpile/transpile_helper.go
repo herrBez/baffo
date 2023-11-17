@@ -11,27 +11,27 @@ import (
 )
 
 type Constraints struct {
-	Otherwise  bool
 	Conditions []ast.Condition
 }
 
-func NewConstraint(_otherwise bool, _conditions ...ast.Condition) Constraints {
+func (c Constraints) String() {
+	transpileConstraint(c)
+}
+
+func NewConstraint(_conditions ...ast.Condition) Constraints {
 	return Constraints{
-		Otherwise:  _otherwise,
 		Conditions: _conditions,
 	}
 }
 
 func NewConstraintLiteral() Constraints {
 	return Constraints{
-		Otherwise:  false,
 		Conditions: []ast.Condition{},
 	}
 }
 
-func AddCondToConstraint(c Constraints, otherwise bool, cond ast.Condition) Constraints {
+func AddCondToConstraint(c Constraints, cond ast.Condition) Constraints {
 	newC := Constraints{
-		Otherwise:  otherwise,
 		Conditions: append(c.Conditions, cond),
 	}
 	return newC
