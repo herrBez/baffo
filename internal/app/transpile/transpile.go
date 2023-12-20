@@ -121,6 +121,7 @@ var transpiler = map[string]map[string]TranspileProcessor{
 		"urldecode":  DealWithURLDecode,
 		"prune":      DealWithPrune,
 		"syslog_pri": DealWithSyslogPri,
+		"csv":        DealWithCSV,
 	},
 	"output": {
 		"elasticsearch": DealWithOutputElasticsearch,
@@ -612,6 +613,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 
 		} else if context == GrokContext {
 			// We can assume there are no other closing parenthesis
+			// TODO: Check whether the subpatterns should be ([^:\}]+)
 			grokPartsFinder := regexp.MustCompile(`\%\{([^:]+)(:[^:]+)?(:[^:]+)?\}`)
 
 			rawGrokParts := grokPartsFinder.FindSubmatch(m)
@@ -741,9 +743,10 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 				)
 			}
 		case "remove_field":
+			fields := getArrayStringAttributeOrStringAttrubute(attr)
 			ingestProcessors = append(ingestProcessors,
 				RemoveProcessor{
-					Field: getStringPointer(getStringAttributeString(attr)),
+					Field: &fields,
 				},
 			)
 		case "add_tag":
@@ -984,8 +987,9 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 
 		if prefix+"original" != uap.Field {
 			// While Elasticsearch copies the original event in the target field, Logstash does not
+			field := []string{prefix + "original"}
 			ingestProcessors = append(ingestProcessors, RemoveProcessor{
-				Field: getStringPointer(prefix + "original"),
+				Field: &field,
 			}.WithTag(id+"fix-target-original").WithDescription("When ECS Compatibility is disabled, Logstash does not add a copy of the Field to Target"))
 		}
 
@@ -999,8 +1003,9 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 			}.WithTag(id+"-rename-"+orig[i]))
 		}
 		// If prefix + os is empty, remove it
+		field := []string{prefix + "os"}
 		ingestProcessors = append(ingestProcessors, RemoveProcessor{
-			Field: getStringPointer(prefix + "os"),
+			Field: &field,
 		}.
 			WithTag(id+"-remove-"+prefix+"-os").
 			WithIf(getStringPointer(getIfFieldIsDefinedAndEmpty(prefix+"os")), true),
@@ -1541,6 +1546,42 @@ func DealWithPrune(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 		}.WithTag(id))
 	}
 
+	return ingestProcessors, onFailureProcessors
+}
+
+func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessors := []IngestProcessor{}
+
+	proc := CSVProcessor{Field: "message", EmptyValue: getStringPointer("")}.WithTag(id).(CSVProcessor)
+
+	for _, attr := range plugin.Attributes {
+		switch attr.Name() {
+		case "source":
+			proc.Field = getStringAttributeString(attr)
+
+		case "columns":
+			proc.TargetField = getArrayStringAttributes(attr)
+		case "separator":
+			proc.Separator = getStringPointer(getStringAttributeString(attr))
+		case "quote_char":
+			proc.Quote = getStringPointer(getStringAttributeString(attr))
+
+		// Deal with skip_empty_columns explicitely set
+		case "skip_empty_columns":
+			skip_empty_columns := getBoolValue(attr)
+			if skip_empty_columns {
+				proc.EmptyValue = nil
+			} else {
+				proc.EmptyValue = getStringPointer("")
+			}
+		// TODO Add Convert
+
+		default:
+			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+		}
+	}
+	ingestProcessors = append(ingestProcessors, proc)
 	return ingestProcessors, onFailureProcessors
 }
 

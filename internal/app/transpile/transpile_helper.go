@@ -242,10 +242,10 @@ func (sp SetProcessor) WithDescription(description string) IngestProcessor {
 }
 
 type RemoveProcessor struct {
-	Field         *string  `json:"field,omitempty"`
-	IgnoreMissing bool     `json:"ignore_missing,omitempty"`
-	Keep          []string `json:"keep,omitempty"`
-	IgnoreFailure bool     `json:"ignore_failure,omitempty"`
+	Field         *[]string `json:"field,omitempty"`
+	IgnoreMissing bool      `json:"ignore_missing,omitempty"`
+	Keep          []string  `json:"keep,omitempty"`
+	IgnoreFailure bool      `json:"ignore_failure,omitempty"`
 	CommonFields
 }
 
@@ -1189,7 +1189,7 @@ type URLDecodeProcessor struct {
 	Field         string  `json:"field"`
 	TargetField   *string `json:"target_field,omitempty"`
 	IgnoreMissing *bool   `json:"ignore_missing,omitempty"`
-	IgnoreFailure bool    `json:"ignore_failure,omitempty"`
+	IgnoreFailure *bool   `json:"ignore_failure,omitempty"`
 	CommonFields
 }
 
@@ -1231,6 +1231,60 @@ func (sp URLDecodeProcessor) WithTag(tag string) IngestProcessor {
 }
 
 func (sp URLDecodeProcessor) WithDescription(description string) IngestProcessor {
+	sp.Description = getStringPointer(description)
+	return sp
+}
+
+type CSVProcessor struct {
+	Field         string   `json:"field"`
+	TargetField   []string `json:"target_field,omitempty"`
+	Separator     *string  `json:"separator,omitempty"`
+	Quote         *string  `json:"quote,omitempty"`
+	IgnoreMissing *bool    `json:"ignore_missing,omitempty"`
+	Trim          *bool    `json:"trim,omitempty"`
+	EmptyValue    *string  `json:"empty_value,omitempty"`
+	IgnoreFailure *bool    `json:"ignore_failure,omitempty"`
+	CommonFields
+}
+
+func (ip CSVProcessor) MarshalJSON() ([]byte, error) {
+	type CSVProcessorAlias CSVProcessor
+
+	return MyJsonEncode(
+		map[string]CSVProcessorAlias{
+			ip.IngestProcessorType(): (CSVProcessorAlias)(ip),
+		},
+	)
+}
+
+func (sp CSVProcessor) String() string {
+	return StringHelper(sp)
+}
+
+func (sp CSVProcessor) IngestProcessorType() string {
+	return "csv"
+}
+
+func (sp CSVProcessor) WithIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
+	return sp
+}
+
+func (sp CSVProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
+
+func (sp CSVProcessor) WithTag(tag string) IngestProcessor {
+	sp.Tag = getStringPointer(tag)
+	return sp
+}
+
+func (sp CSVProcessor) WithDescription(description string) IngestProcessor {
 	sp.Description = getStringPointer(description)
 	return sp
 }
