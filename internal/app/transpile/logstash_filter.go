@@ -16,22 +16,6 @@ type CommonFilterAttributes struct {
 	RemoveTag     []string
 }
 
-type GrokFilterPlugin struct {
-	BreakOnMatch       bool
-	ECSCompatibility   string
-	KeepEmptyCaptures  bool
-	Match              map[string][]string // Single strings will be written in an array
-	NamedCapturesOnly  bool
-	Overwrite          bool
-	PatternDefinitions map[string]string
-	PatternsDir        []string
-	PatternsFileGlob   []string
-	TagOnFailure       []string
-	TimeoutMillis      int
-	TimeoutScope       string
-	CommonAttributes   CommonFilterAttributes
-}
-
 func hashAttributeToMapArray(attr ast.Attribute) map[string][]string {
 	m := map[string][]string{}
 	switch tattr := attr.(type) {
@@ -103,30 +87,4 @@ func NewCommonFilterAttributes(plugin ast.Plugin) CommonFilterAttributes {
 		}
 	}
 	return cfa
-}
-
-func NewGrok(plugin ast.Plugin) {
-	// Default Values
-	gfp := GrokFilterPlugin{
-		ECSCompatibility: "v8",
-		CommonAttributes: NewCommonFilterAttributes(plugin),
-		TagOnFailure:     []string{"_grok_parse_failure"},
-	}
-
-	for _, attr := range plugin.Attributes {
-
-		switch attr.Name() {
-		// It is a common field
-		case "match":
-			gfp.Match = hashAttributeToMapArray(attr)
-		case "ecs_compatibility":
-			gfp.ECSCompatibility = getStringAttributeString(attr)
-		case "pattern_definitions":
-			gfp.PatternDefinitions = hashAttributeToMap(attr)
-		case "tag_on_failure":
-			// Overwrite Tag on Failure if needed
-			gfp.TagOnFailure = getArrayStringAttributes(attr)
-
-		}
-	}
 }
