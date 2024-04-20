@@ -37,12 +37,13 @@ type Transpile struct {
 	fidelity                  bool
 }
 
-func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool) Transpile {
+func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool) Transpile {
 	return Transpile{
 		threshold:                 threshold,
 		log_level:                 level[strings.ToLower(log_level)],
 		deal_with_error_locally:   deal_with_error_locally,
 		addDefaultGlobalOnFailure: addDefaultGlobalOnFailure,
+		fidelity:                  fidelity,
 	}
 }
 

@@ -47,7 +47,6 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 			branchName := fmt.Sprintf("%s-branch-%d", ip.Name, c.iter.index)
 
 			currentConstraints := constraint
-			// var elseConstraint Constraints
 
 			NotOperator := ast.BooleanOperator{
 				Op:    ast.NoOperator,
@@ -199,59 +198,4 @@ func (c *Cursor) Plugin() *ast.Plugin {
 		return p
 	}
 	return &p
-}
-
-// Parent returns the slice of BranchOrPlugin of the current Plugin.
-func (c *Cursor) Parent() []ast.BranchOrPlugin { return c.parent }
-
-// Index reports the index of the current Plugin in the slice of BranchOrPlugin
-// that contains it.
-func (c *Cursor) Index() int {
-	return c.iter.index
-}
-
-// Delete deletes the current Plugin from its containing slice.
-// If the current Plugin is not part of a slice, Delete panics.
-func (c *Cursor) Delete() {
-	i := c.Index()
-	if i < 0 {
-		panic("Delete plugin not contained in slice")
-	}
-	c.parent = append(c.parent[:i], c.parent[i+1:]...)
-	c.iter.step--
-}
-
-// Replace replaces the current Plugin with p.
-// The replacement is not walked by Apply.
-// If the current Plugin is not part of a slice, Replace panics.
-func (c *Cursor) Replace(p ast.BranchOrPlugin) {
-	i := c.Index()
-	if i < 0 {
-		panic("Replaced plugin not contained in slice")
-	}
-	c.parent[i] = p
-}
-
-// InsertBefore inserts p before the current Plugin in its containing slice.
-// If the current Node is not part of a slice, InsertBefore panics.
-// Apply will not walk p.
-func (c *Cursor) InsertBefore(p ast.BranchOrPlugin) {
-	i := c.Index()
-	if i < 0 {
-		panic("InsertBefore plugin not contained in slice")
-	}
-	c.parent = append(c.parent[:i], append([]ast.BranchOrPlugin{p}, c.parent[i:]...)...)
-	c.iter.step++
-}
-
-// InsertAfter inserts p after the current Plugin in its containing slice.
-// If the current Node is not part of a slice, InsertAfter panics.
-// Apply will not walk p.
-func (c *Cursor) InsertAfter(p ast.BranchOrPlugin) {
-	i := c.Index()
-	if i < 0 {
-		panic("InsertAfter plugin not contained in slice")
-	}
-	c.parent = append(c.parent[:i+1], append([]ast.BranchOrPlugin{p}, c.parent[i+1:]...)...)
-	c.iter.step++
 }
