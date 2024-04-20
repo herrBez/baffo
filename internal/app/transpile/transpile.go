@@ -1816,14 +1816,6 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 	// apply func returns an ApplyPluginsFuncCondition object depending on the section
 	applyFunc := func(section string) ApplyPluginsFuncCondition {
 		return func(c *Cursor, constraint Constraints, ip *IngestPipeline) {
-			// fmt.Printf("Plugin: %s, Pos: %s\n", c.Plugin().Name(), c.Plugin().Pos())
-
-			// f, ok := transpiler["filter"][c.Plugin().Name()]
-			// if !ok {
-			// 	log.Printf("There is no handler for the plugin %s\n", c.Plugin().Name())
-			// 	f = DealWithMissingTranspiler
-			// }
-			// ip.Processors = append(ip.Processors, f(*c.Plugin(), constraint)...)
 			log.Debug().Msgf(section)
 
 			ip.Processors = append(ip.Processors, t.DealWithPlugin(section, *c.Plugin(), constraint)...)
