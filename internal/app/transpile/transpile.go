@@ -1814,7 +1814,7 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 
 	// apply func returns an ApplyPluginsFuncCondition object depending on the section
 	applyFunc := func(section string) ApplyPluginsFuncCondition {
-		return func(c *Cursor, constraint Constraints) {
+		return func(c *Cursor, constraint Constraints, ip *IngestPipeline) {
 			// fmt.Printf("Plugin: %s, Pos: %s\n", c.Plugin().Name(), c.Plugin().Pos())
 
 			// f, ok := transpiler["filter"][c.Plugin().Name()]
@@ -1832,10 +1832,10 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 	}
 
 	for _, f := range c.Filter {
-		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("filter"))
+		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("filter"), &ip)
 	}
 	for _, f := range c.Output {
-		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"))
+		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"), &ip)
 	}
 
 	ips := getAllIngestPipeline(ip)

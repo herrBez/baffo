@@ -6,11 +6,11 @@ import (
 	ast "github.com/breml/logstash-config/ast"
 )
 
-type ApplyPluginsFuncCondition func(cursor *Cursor, c Constraints)
+type ApplyPluginsFuncCondition func(cursor *Cursor, c Constraints, ip *IngestPipeline)
 
 // ApplyPlugins traverses an AST recursively, starting with root, and calling
 // applyPluginsFunc for each plugin. Apply returns the AST, possibly modified.
-func MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPluginsFunc ApplyPluginsFuncCondition) IngestPipeline {
+func MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPluginsFunc ApplyPluginsFuncCondition, ip *IngestPipeline) IngestPipeline {
 	c := Cursor{
 		parent: root,
 		iter: iterator{
@@ -26,41 +26,41 @@ func MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPlugins
 
 		c.iter.step = 1
 
+		counter := 0
+
 		switch block := c.parent[c.iter.index].(type) {
 
 		case ast.Branch:
-			// elseConstraint = NewConstraintLiteral()
+			counter += 1
 
-			// AddCondToConstraint(NewNegativeConditionExpression(block.IfBlock.Condition))
-
-			var elseCondition ast.Condition
-			var elseConstraint Constraints
+			currentConstraints := constraint
+			// var elseConstraint Constraints
 
 			NotOperator := ast.BooleanOperator{
 				Op:    ast.NoOperator,
 				Start: block.Pos(),
 			}
 
-			elseCondition = ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.IfBlock.Condition))
-			elseConstraint = NewConstraint(elseCondition)
+			currentConstraints = AddCondToConstraint(constraint, block.IfBlock.Condition)
 
-			MyIteration(block.IfBlock.Block, AddCondToConstraint(constraint, block.IfBlock.Condition), applyPluginsFunc)
+			MyIteration(block.IfBlock.Block, currentConstraints, applyPluginsFunc, ip)
+
+			currentConstraints = AddCondToConstraint(constraint, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.IfBlock.Condition)))
 
 			for i := range block.ElseIfBlock {
-				elseConstraint.Conditions = append(elseConstraint.Conditions, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.ElseIfBlock[i].Condition)))
-
-				MyIteration(block.ElseIfBlock[i].Block, AddCondToConstraint(constraint, block.ElseIfBlock[i].Condition), applyPluginsFunc)
+				MyIteration(block.ElseIfBlock[i].Block, AddCondToConstraint(currentConstraints, block.ElseIfBlock[i].Condition), applyPluginsFunc, ip)
+				currentConstraints = AddCondToConstraint(currentConstraints, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.ElseIfBlock[i].Condition)))
 			}
 
-			MyIteration(block.ElseBlock.Block, elseConstraint, applyPluginsFunc)
+			MyIteration(block.ElseBlock.Block, currentConstraints, applyPluginsFunc, ip)
 
 			c.parent[c.iter.index] = block
 
 		case ast.Plugin:
-			applyPluginsFunc(&c, constraint)
+			applyPluginsFunc(&c, constraint, ip)
 
 		case nil:
-			applyPluginsFunc(&c, constraint)
+			applyPluginsFunc(&c, constraint, ip)
 
 		default:
 			panic(fmt.Sprintf("type %T for block in ApplyPlugins not supported", c.parent[c.iter.index]))
