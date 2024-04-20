@@ -34,6 +34,7 @@ type Transpile struct {
 	log_level                 zerolog.Level
 	deal_with_error_locally   bool
 	addDefaultGlobalOnFailure bool
+	fidelity                  bool
 }
 
 func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool) Transpile {
