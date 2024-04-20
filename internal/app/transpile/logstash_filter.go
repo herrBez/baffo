@@ -32,11 +32,6 @@ type GrokFilterPlugin struct {
 	CommonAttributes   CommonFilterAttributes
 }
 
-func getStringPointer(s string) *string {
-	t := s
-	return &t
-}
-
 func hashAttributeToMapArray(attr ast.Attribute) map[string][]string {
 	m := map[string][]string{}
 	switch tattr := attr.(type) {

@@ -109,7 +109,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 			if !t.fidelity {
 				cond = transpileConstraint(currentConstraints)
 			} else {
-				cond = getStringPointer(fmt.Sprintf("ctx._TRANSPILER['%s-if']", branchName))
+				cond = pointer(fmt.Sprintf("ctx._TRANSPILER['%s-if']", branchName))
 			}
 
 			// mergeWithIP(ip, tmp_ip, currentConstraints, t.threshold)
@@ -135,7 +135,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 				if !t.fidelity {
 					cond = transpileConstraint(currentConstraints)
 				} else {
-					cond = getStringPointer(fmt.Sprintf("ctx._TRANSPILER['%s-else']", branchName))
+					cond = pointer(fmt.Sprintf("ctx._TRANSPILER['%s-else']", branchName))
 				}
 
 				mergeWithIPFidelity(ip, tmp_ip, cond, t.threshold)
@@ -152,7 +152,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 			if !t.fidelity {
 				cond = transpileConstraint(currentConstraints)
 			} else {
-				cond = getStringPointer(fmt.Sprintf("ctx._TRANSPILER['%s-else']", branchName))
+				cond = pointer(fmt.Sprintf("ctx._TRANSPILER['%s-else']", branchName))
 			}
 			// mergeWithIP(ip, tmp_ip, currentConstraints, t.threshold)
 			mergeWithIPFidelity(ip, tmp_ip, cond, t.threshold)
