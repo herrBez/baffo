@@ -606,9 +606,9 @@ func (sp JoinProcessor) WithDescription(description string) IngestProcessor {
 }
 
 type KVProcessor struct {
-	Field         string   `json:"field,omitempty"`
-	FieldSplit    string   `json:"field_split,omitempty"`
-	ValueSplit    string   `json:"value_split,omitempty"`
+	Field         string   `json:"field"`
+	FieldSplit    string   `json:"field_split"`
+	ValueSplit    string   `json:"value_split"`
 	TargetField   *string  `json:"target_field,omitempty"`
 	IncludeKeys   []string `json:"include_keys,omitempty"`
 	ExcludeKeys   []string `json:"exclude_keys,omitempty"`
@@ -1023,7 +1023,7 @@ var LogstashConvertToConvertProcessorType = map[string]string{
 	"integer":    "integer",
 	"integer_eu": "integer",
 	"float":      "float",
-	"float_eu":   "float_eu",
+	"float_eu":   "float",
 	"string":     "string",
 	"boolean":    "boolean",
 }
@@ -1233,6 +1233,11 @@ func (sp URLDecodeProcessor) WithTag(tag string) IngestProcessor {
 func (sp URLDecodeProcessor) WithDescription(description string) IngestProcessor {
 	sp.Description = getStringPointer(description)
 	return sp
+}
+
+var LogstashCSVConvertToConvertProcessorType = map[string]string{
+	"integer": "integer",
+	"float":   "float",
 }
 
 type CSVProcessor struct {
