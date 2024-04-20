@@ -57,7 +57,8 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 			// compute the current Constraint "inherited + if condition"
 			// create a new temporary pipeline and iterate recursively
 			// Merge the current Pipeline and the temporary Pipeline
-			currentConstraints = AddCondToConstraint(constraint, block.IfBlock.Condition)
+			oldConstraints := constraint
+			currentConstraints = AddCondToConstraint(oldConstraints, block.IfBlock.Condition)
 
 			tmp_ip := NewIngestPipeline(fmt.Sprintf("%s-branch-%d-if", ip.Name, c.iter.index))
 
@@ -77,9 +78,12 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 
 				t.MyIteration(block.ElseIfBlock[i].Block, NewConstraintLiteral(), applyPluginsFunc, &tmp_ip)
 
+				oldConstraints := currentConstraints
+				currentConstraints = AddCondToConstraint(oldConstraints, block.ElseIfBlock[i].Condition)
+
 				mergeWithIP(ip, tmp_ip, currentConstraints, t.threshold)
 
-				currentConstraints = AddCondToConstraint(currentConstraints, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.ElseIfBlock[i].Condition)))
+				currentConstraints = AddCondToConstraint(oldConstraints, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.ElseIfBlock[i].Condition)))
 
 			}
 
