@@ -56,11 +56,11 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 			// Compute the conditions before executing the branches to keep the same
 			// semantic of if, else-if, ..., else
 			baseConstraint := transpileConstraint(constraint)
-			script := fmt.Sprintf("if ctx.containsKey('%s') { ctx['%s'] = [:]; }\n", TRANSPILER_PREFIX, TRANSPILER_PREFIX)
+			script := fmt.Sprintf("if (ctx.containsKey('%s')) { ctx['%s'] = [:]; }\n", TRANSPILER_PREFIX, TRANSPILER_PREFIX)
 			if baseConstraint != nil {
-				script = script + fmt.Sprintf(`def ctx.%s['%s-base'] = %s;\n`, TRANSPILER_PREFIX, branchName, *baseConstraint)
+				script = script + fmt.Sprintf("ctx.%s['%s-base'] = %s;\n", TRANSPILER_PREFIX, branchName, *baseConstraint)
 			} else {
-				script = script + fmt.Sprintf(`def ctx.%s['%s-base'] = true;\n`, TRANSPILER_PREFIX, branchName)
+				script = script + fmt.Sprintf("ctx.%s['%s-base'] = true;\n", TRANSPILER_PREFIX, branchName)
 			}
 
 			oldConstraints := constraint
@@ -68,7 +68,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 			baseConstraint = transpileConstraint(currentConstraints)
 
 			if baseConstraint != nil {
-				script = script + fmt.Sprintf(`def ctx.%s['%s-if"] = %s;\n`, TRANSPILER_PREFIX, branchName, *baseConstraint)
+				script = script + fmt.Sprintf("ctx.%s['%s-if'] = %s;\n", TRANSPILER_PREFIX, branchName, *baseConstraint)
 			}
 
 			currentConstraints = AddCondToConstraint(constraint, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.IfBlock.Condition)))
@@ -78,13 +78,13 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 				oldConstraints := currentConstraints
 				currentConstraints = AddCondToConstraint(oldConstraints, block.ElseIfBlock[i].Condition)
 
-				script = script + fmt.Sprintf(`def ctx.%s['%s-elif-%d'] = %s;\n`, TRANSPILER_PREFIX, branchName, i, *transpileConstraint(currentConstraints))
+				script = script + fmt.Sprintf("ctx.%s['%s-elif-%d'] = %s;\n", TRANSPILER_PREFIX, branchName, i, *transpileConstraint(currentConstraints))
 
 				currentConstraints = AddCondToConstraint(oldConstraints, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.ElseIfBlock[i].Condition)))
 
 			}
 
-			script = script + fmt.Sprintf(`def ctx.%s['%s-else'] = %s;`, TRANSPILER_PREFIX, branchName, *transpileConstraint(currentConstraints))
+			script = script + fmt.Sprintf("ctx.%s['%s-else'] = %s;", TRANSPILER_PREFIX, branchName, *transpileConstraint(currentConstraints))
 
 			if t.fidelity {
 				ip.Processors = append(ip.Processors, ScriptProcessor{
