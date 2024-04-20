@@ -223,11 +223,25 @@ func transpileCondition(c ast.Condition) string {
 
 		case ast.CompareExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
-			transpileRvalue(texpr.RValue)
-			transpileRvalue(texpr.LValue)
 			output = output + bOpComparator + transpileRvalue(texpr.LValue) + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue)
 
-		// case ast.RegexpExpression: TODO
+		case ast.RegexpExpression:
+			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
+			val := ""
+			switch x := texpr.RValue.(type) {
+			case ast.StringAttribute:
+				val = x.Value()
+			default:
+				log.Panic().Msg("Unexpected Case")
+			}
+			rawSelector := ""
+			existenceCondition := ""
+			switch x := texpr.LValue.(type) {
+			case ast.Selector:
+				rawSelector = toElasticPipelineSelector(x.String())
+				existenceCondition = toElasticPipelineSelectorCondition(x.String())
+			}
+			output = output + bOpComparator + existenceCondition + " != null && ctx." + rawSelector + " =~ /" + val + "/"
 
 		case ast.RvalueExpression:
 			bOpComparator := ""
@@ -262,14 +276,28 @@ func getHashAttributeKeyValue(attr ast.Attribute) ([]string, []string) {
 			switch tValue := entry.Value.(type) {
 			case ast.StringAttribute:
 				values = append(values, toElasticPipelineSelector(tValue.Value()))
+			case ast.NumberAttribute:
+				// TODO: Fix the return value of the function or add a new function
+				log.Warn().Msg("Converting a number to string")
+				values = append(values, tValue.ValueString())
 
 			default:
-				log.Panic().Msg("Unexpected key of type not string")
+				log.Panic().Msg("Unexpected value type of type not string")
 			}
+		}
+	// For the Rename use-case
+	case ast.ArrayAttribute:
+		arrays := getArrayStringAttributes(attr)
+		if len(arrays)%2 != 0 {
+			log.Panic().Msg("Hash expected but an uneven list is provided")
+		}
+		for i := 0; i < len(arrays); i += 2 {
+			keys = append(keys, arrays[i])
+			values = append(values, arrays[i+1])
 		}
 
 	default: // Unexpected Case --> PANIC
-		log.Panic().Msg("Unexpected Case")
+		log.Panic().Msgf("Unexpected Case %s", attr.String())
 	}
 	return keys, values
 }
@@ -464,7 +492,7 @@ else {
 				SplitProcessor{
 					Separator: values[i],
 					Field:     keys[i],
-				}.WithDescription(fmt.Sprintf("Join array '%s' with separator '%s'", keys[i], values[i])))
+				}.WithDescription(fmt.Sprintf("Split array '%s' with separator '%s'", keys[i], values[i])))
 		}
 
 	case "strip":
@@ -505,9 +533,11 @@ else {
 	case "replace":
 		keys, values := getHashAttributeKeyValue(attr)
 		for i := range keys {
+			val, _ := toElasticPipelineSelectorExpression(values[i], ProcessorContext)
+
 			ingestProcessors = append(ingestProcessors,
 				SetProcessor{
-					Value:    values[i],
+					Value:    val,
 					Field:    keys[i],
 					Override: true,
 				}.WithDescription(fmt.Sprintf("Replace/Create field '%s' with value '%s'", keys[i], values[i])))
@@ -540,7 +570,8 @@ else {
 func DealWithTagOnFailure(attr ast.Attribute, id string, t Transpile) []IngestProcessor {
 	// We deliberately ignore the tag_on_failure when the option is deactivate
 	// The assumption is that a global processor will deal with this
-	// Use the default value to keep the Logstash's behavior
+	// This may potentially break the semantic compatibility (because the tag could be use in other places)
+	// but it is the "elasticsearch" pipeline way of dealing with errors
 	if !t.deal_with_error_locally {
 		return []IngestProcessor{}
 	}
@@ -663,6 +694,7 @@ func getIfFieldDefined(field string) string {
 		newFieldButLast = newFieldButLast + "." + sf
 		newFieldButLastMaybe = newFieldButLastMaybe + "?." + sf
 	}
+
 	if newFieldButLastMaybe == "ctx" {
 		return fmt.Sprintf("ctx.containsKey('%s')", splittedField[len(splittedField)-1])
 	} else {
@@ -717,10 +749,8 @@ func processorsToPipeline(ingestProcessors []IngestProcessor, name string, thres
 	}
 }
 
-func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, id string, threshold int) []IngestProcessor {
+func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
-
-	onSuccessCondition := getStringPointer(fmt.Sprintf("!%s", getIfFieldDefined(getUniqueOnFailureAddField(id))))
 
 	for _, attr := range plugin.Attributes {
 		if !Contains(CommonAttributes, attr.Name()) {
@@ -739,7 +769,7 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 					SetProcessor{
 						Value: value,
 						Field: keys[i],
-					}.WithDescription(fmt.Sprintf("On Success of %s, add field '%s' with value '%s'", id, keys[i], value)),
+					},
 				)
 			}
 		case "remove_field":
@@ -756,21 +786,27 @@ func DealWithCommonAttributes(plugin ast.Plugin, constraintTranspiled *string, i
 					Value: getArrayStringAttributes(attr),
 				},
 			)
+
+		case "remove_tag":
+			tags := getArrayStringAttributes(attr)
+			for _, t := range tags {
+				ingestProcessors = append(ingestProcessors,
+					ScriptProcessor{
+						Source: getStringPointer(
+							fmt.Sprintf(
+								`if(ctx?.tags != null && ctx.tags instanceof List) {
+	ctx.tags.removeIf(x -> x == '%s')
+}`, toElasticPipelineSelector(t),
+							))},
+				)
+			}
+
 		case "enable_metric", "periodic_flush": // N/A
 
 		default:
 			log.Printf("Remove Tag (%s) is not yet supported", attr.Name())
 
 		}
-	}
-
-	ingestProcessors = processorsToPipeline(ingestProcessors, fmt.Sprintf("%s-on-success", id), threshold)
-
-	for i := range ingestProcessors {
-		// log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
-		ingestProcessors[i] = ingestProcessors[i].WithIf(constraintTranspiled, false)
-		ingestProcessors[i] = ingestProcessors[i].WithIf(onSuccessCondition, true)
-		ingestProcessors[i] = ingestProcessors[i].WithTag(fmt.Sprintf("%s-%d-onSucc", id, len(ingestProcessors)))
 	}
 
 	return ingestProcessors
@@ -1336,7 +1372,22 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 
 	constraintTranspiled := transpileConstraint(constraint)
 
-	onSuccessProcessors := DealWithCommonAttributes(plugin, constraintTranspiled, id, t.threshold)
+	onSuccessCondition := getStringPointer(fmt.Sprintf("!%s", getIfFieldDefined(getUniqueOnFailureAddField(id))))
+	onSuccessProcessors := DealWithCommonAttributes(plugin)
+	for i := range onSuccessProcessors {
+		// log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
+		onSuccessProcessors[i] = onSuccessProcessors[i].WithIf(constraintTranspiled, false)
+	}
+
+	// If we deal with error
+	if t.deal_with_error_locally {
+		onSuccessProcessors = processorsToPipeline(onSuccessProcessors, fmt.Sprintf("%s-on-success", id), t.threshold)
+		for i := range onSuccessProcessors {
+			onSuccessProcessors[i] = onSuccessProcessors[i].WithIf(onSuccessCondition, true)
+			onSuccessProcessors[i] = onSuccessProcessors[i].WithTag(fmt.Sprintf("%s-%d-onSucc", id, len(onSuccessProcessors)))
+		}
+	}
+	// else we rely on a global on_failure and if the processor is successfully executed we can simply proceed
 
 	noncommonattrs := []ast.Attribute{}
 
@@ -1352,7 +1403,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	ingestProcessors, onFailureProcessors := DealWithPluginFunction(pa, id, t)
 
 	// On Success Processors should be executed only when no Failure happened
-	if len(onSuccessProcessors) > 0 {
+	if len(onSuccessProcessors) > 0 && t.deal_with_error_locally {
 		onFailureProcessors = append(onFailureProcessors, getTranspilerOnFailureProcessor(id))
 	}
 
@@ -1365,7 +1416,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	}
 
 	// To keep a similar semantics as Logstash we create an additional pipeline
-	// If we have more than one Processor that has been created by the plugin-specific function
+	// If we have more than t.threshold Processors that have been created by the plugin-specific function
 	ingestProcessors = processorsToPipeline(ingestProcessors, id, t.threshold)
 
 	for i := range ingestProcessors {
@@ -1403,6 +1454,7 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 	kv := KVProcessor{
 		FieldSplit: " ",       // Default value in Logstash
 		Field:      "message", // Default value in Logstash
+		ValueSplit: "=",       // Default value in Logstash
 	}.WithTag(id).(KVProcessor)
 
 	for _, attr := range plugin.Attributes {
@@ -1427,6 +1479,8 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 			kv.StripBrackets = !getBoolValue(attr)
 		case "source":
 			kv.Field = getStringAttributeString(attr)
+		case "value_split":
+			kv.ValueSplit = getStringAttributeString(attr)
 		default:
 			log.Printf("Attribute '%s' is currently not supported", attr.Name())
 
@@ -1553,6 +1607,8 @@ func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, 
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
+	onSuccessProcessors := []IngestProcessor{}
+
 	proc := CSVProcessor{Field: "message", EmptyValue: getStringPointer("")}.WithTag(id).(CSVProcessor)
 
 	for _, attr := range plugin.Attributes {
@@ -1575,13 +1631,30 @@ func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, 
 			} else {
 				proc.EmptyValue = getStringPointer("")
 			}
-		// TODO Add Convert
+		case "convert":
+			keys, values := getHashAttributeKeyValue(attr)
+			for i := range keys {
+				switch values[i] {
+				case "date":
+					log.Warn().Msgf("Date is not yet supported")
+				case "date_time":
+					log.Warn().Msgf("Date is not yet supported")
+				case "integer":
+					onSuccessProcessors = append(onSuccessProcessors, ConvertProcessor{Field: keys[i], Type: values[i]})
+				case "float":
+					onSuccessProcessors = append(onSuccessProcessors, ConvertProcessor{Field: keys[i], Type: values[i]})
+
+				}
+
+				onSuccessProcessors = append(onSuccessProcessors, ConvertProcessor{Field: keys[i], Type: values[i]})
+			}
 
 		default:
-			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+			log.Warn().Msgf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
 	}
 	ingestProcessors = append(ingestProcessors, proc)
+	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
 	return ingestProcessors, onFailureProcessors
 }
 
