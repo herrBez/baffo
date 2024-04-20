@@ -44,8 +44,9 @@ type IngestPipeline struct {
 	OnFailureProcessors []IngestProcessor `json:"on_failure"`
 }
 
-func NewIngestPipeline() IngestPipeline {
+func NewIngestPipeline(name string) IngestPipeline {
 	return IngestPipeline{
+		Name:                name,
 		Description:         "",
 		Processors:          []IngestProcessor{},
 		OnFailureProcessors: nil,

@@ -8,9 +8,24 @@ import (
 
 type ApplyPluginsFuncCondition func(cursor *Cursor, c Constraints, ip *IngestPipeline)
 
+func mergeWithIP(ip *IngestPipeline, tmp_ip IngestPipeline, currentConstraints Constraints, threshold int) {
+	if len(tmp_ip.Processors) < threshold {
+		for _, tp := range tmp_ip.Processors {
+			ip.Processors = append(ip.Processors, tp.WithIf(transpileConstraint(currentConstraints), false))
+		}
+	} else {
+		ip.Processors = append(ip.Processors,
+			PipelineProcessor{
+				Pipeline: &tmp_ip,
+				Name:     tmp_ip.Name,
+			}.WithIf(transpileConstraint(currentConstraints), false),
+		)
+	}
+}
+
 // ApplyPlugins traverses an AST recursively, starting with root, and calling
 // applyPluginsFunc for each plugin. Apply returns the AST, possibly modified.
-func MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPluginsFunc ApplyPluginsFuncCondition, ip *IngestPipeline) IngestPipeline {
+func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPluginsFunc ApplyPluginsFuncCondition, ip *IngestPipeline) IngestPipeline {
 	c := Cursor{
 		parent: root,
 		iter: iterator{
@@ -26,12 +41,9 @@ func MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPlugins
 
 		c.iter.step = 1
 
-		counter := 0
-
 		switch block := c.parent[c.iter.index].(type) {
 
 		case ast.Branch:
-			counter += 1
 
 			currentConstraints := constraint
 			// var elseConstraint Constraints
@@ -41,18 +53,41 @@ func MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPlugins
 				Start: block.Pos(),
 			}
 
+			// IF
+			// compute the current Constraint "inherited + if condition"
+			// create a new temporary pipeline and iterate recursively
+			// Merge the current Pipeline and the temporary Pipeline
 			currentConstraints = AddCondToConstraint(constraint, block.IfBlock.Condition)
 
-			MyIteration(block.IfBlock.Block, currentConstraints, applyPluginsFunc, ip)
+			tmp_ip := NewIngestPipeline(fmt.Sprintf("%s-branch-%d-if", ip.Name, c.iter.index))
+
+			t.MyIteration(block.IfBlock.Block, NewConstraintLiteral(), applyPluginsFunc, &tmp_ip)
+
+			mergeWithIP(ip, tmp_ip, currentConstraints, t.threshold)
+
+			// Else-If
+			// else-if-1 constraint = "inherited + negate if condition"
+			// else-if-2 constraint = "inherited + negate if condition + negate elseif 1 constraint"
+			// ...
 
 			currentConstraints = AddCondToConstraint(constraint, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.IfBlock.Condition)))
 
 			for i := range block.ElseIfBlock {
-				MyIteration(block.ElseIfBlock[i].Block, AddCondToConstraint(currentConstraints, block.ElseIfBlock[i].Condition), applyPluginsFunc, ip)
+				tmp_ip = NewIngestPipeline(fmt.Sprintf("%s-branch-%d-elseif-%d", ip.Name, c.iter.index, i))
+
+				t.MyIteration(block.ElseIfBlock[i].Block, NewConstraintLiteral(), applyPluginsFunc, &tmp_ip)
+
+				mergeWithIP(ip, tmp_ip, currentConstraints, t.threshold)
+
 				currentConstraints = AddCondToConstraint(currentConstraints, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.ElseIfBlock[i].Condition)))
+
 			}
 
-			MyIteration(block.ElseBlock.Block, currentConstraints, applyPluginsFunc, ip)
+			// Else
+			// else codnition = "inherited + negate if condition + for 1..N negate else if $i condition"
+			tmp_ip = NewIngestPipeline(fmt.Sprintf("%s-branch-%d-else", ip.Name, c.iter.index))
+			t.MyIteration(block.ElseBlock.Block, NewConstraintLiteral(), applyPluginsFunc, &tmp_ip)
+			mergeWithIP(ip, tmp_ip, currentConstraints, t.threshold)
 
 			c.parent[c.iter.index] = block
 
@@ -69,7 +104,7 @@ func MyIteration(root []ast.BranchOrPlugin, constraint Constraints, applyPlugins
 		c.iter.index += c.iter.step
 	}
 
-	return NewIngestPipeline()
+	return NewIngestPipeline("placeholder")
 }
 
 // An iterator controls iteration over a slice of nodes.

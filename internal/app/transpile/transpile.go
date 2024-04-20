@@ -1832,10 +1832,10 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 	}
 
 	for _, f := range c.Filter {
-		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("filter"), &ip)
+		t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("filter"), &ip)
 	}
 	for _, f := range c.Output {
-		MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"), &ip)
+		t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"), &ip)
 	}
 
 	ips := getAllIngestPipeline(ip)
