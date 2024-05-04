@@ -11,14 +11,14 @@ type ApplyPluginsFuncCondition func(cursor *Cursor, c Constraints, ip *IngestPip
 func mergeWithIPFidelity(ip *IngestPipeline, tmp_ip IngestPipeline, cond *string, threshold int) {
 	if len(tmp_ip.Processors) < threshold {
 		for _, tp := range tmp_ip.Processors {
-			ip.Processors = append(ip.Processors, tp.WithIf(cond, false))
+			ip.Processors = append(ip.Processors, tp.WithIf(cond, true))
 		}
 	} else {
 		ip.Processors = append(ip.Processors,
 			PipelineProcessor{
 				Pipeline: &tmp_ip,
 				Name:     tmp_ip.Name,
-			}.WithIf(cond, false),
+			}.WithIf(cond, true),
 		)
 	}
 }
@@ -134,7 +134,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 				if !t.fidelity {
 					cond = transpileConstraint(currentConstraints)
 				} else {
-					cond = pointer(fmt.Sprintf("ctx.%s['%s-else']", TRANSPILER_PREFIX, branchName))
+					cond = pointer(fmt.Sprintf("ctx.%s['%s-elseif-%d']", TRANSPILER_PREFIX, branchName, i))
 				}
 
 				mergeWithIPFidelity(ip, tmp_ip, cond, t.threshold)
