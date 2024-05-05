@@ -151,16 +151,63 @@ func transpileBoolExpression(bo ast.BooleanOperator) string {
 	return ""
 }
 
-func toElasticPipelineSelectorCondition(sel string) string {
-
+// This function converts a selector (e.g., [foo][bar]) to its Painless correspondent.
+// We have two flavors of conversions:
+//   - Nullable --> We return a nullable expression like ctx?.foo?.bar
+//   - Nonnullable --> We return a non-nullable expression like ctx.foo.bar
+//
+// Special care should be put for special symbols like '@'. They don't allow
+// to be used with dot notation.
+// In principle we could drastically simplify the function by avoiding dot notation,
+// but we preferred to keep it because it feels more natural for Painless users.
+func toElasticPipelineSelectorWithNullable(sel string, nullable bool) string {
+	// if the selector contains square brackets we need to convert them
 	if sel[0] == '[' && sel[len(sel)-1] == ']' {
-		return "ctx?." + strings.ReplaceAll(sel[1:len(sel)-1], "][", "?.")
+		parts := strings.Split(sel[1:len(sel)-1], "][")
+		elasticSelector := "ctx"
+		currentPath := ""
+		for _, part := range parts {
+			// e.g., field metadata
+			if strings.HasPrefix(part, "@") {
+				elasticSelector += ".getOrDefault('@metadata', null)"
+				currentPath += fmt.Sprintf("['%s']", part)
+			} else {
+				elasticSelector += "?." + part
+				currentPath += fmt.Sprintf(".%s", part)
+			}
+		}
+
+		if nullable {
+			return elasticSelector
+		} else {
+			return "ctx" + currentPath
+		}
+	} else {
+		if strings.Contains(sel, "@") || strings.Contains(sel, ".") {
+			if nullable {
+				return fmt.Sprintf("ctx.getOrDefault('%s', null)", sel)
+			} else {
+				return fmt.Sprintf("ctx['%s']", sel)
+			}
+		} else {
+			if nullable {
+				return "ctx?." + sel
+			} else {
+				return "ctx." + sel
+			}
+		}
 	}
-	return "ctx." + sel
 }
 
-func toElasticPipelineSelector(sel string) string {
+// When using Selectors in conditions we need to check whether they are null or not and
+// and afterward can use them
+func toElasticPipelineSelectorCondition(sel string) string {
+	return toElasticPipelineSelectorWithNullable(sel, true) + " != null && " + toElasticPipelineSelectorWithNullable(sel, false)
+}
 
+// This function should be used when translating expressions like set processors value
+// where {{ @metadata.foo }} is allowed
+func toElasticPipelineSelector(sel string) string {
 	if sel[0] == '[' && sel[len(sel)-1] == ']' {
 		return strings.ReplaceAll(sel[1:len(sel)-1], "][", ".")
 	}
@@ -225,7 +272,7 @@ func transpileCondition(c ast.Condition) string {
 
 		case ast.CompareExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
-			output = output + bOpComparator + transpileRvalue(texpr.LValue) + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue)
+			output = output + bOpComparator + "(" + transpileRvalue(texpr.LValue) + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue) + ")"
 
 		case ast.RegexpExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
@@ -233,17 +280,19 @@ func transpileCondition(c ast.Condition) string {
 			switch x := texpr.RValue.(type) {
 			case ast.StringAttribute:
 				val = x.Value()
+			case ast.Regexp:
+				val = x.Regexp
 			default:
-				log.Panic().Msg("Unexpected Case")
+				log.Panic().Msgf("Unexpected Case %T", x)
 			}
-			rawSelector := ""
-			existenceCondition := ""
+			convertedSelector := ""
 			switch x := texpr.LValue.(type) {
 			case ast.Selector:
-				rawSelector = toElasticPipelineSelector(x.String())
-				existenceCondition = toElasticPipelineSelectorCondition(x.String())
+				convertedSelector = toElasticPipelineSelectorCondition(x.String())
+			default:
+				log.Panic().Msgf("Unexpected Case %T", x)
 			}
-			output = output + bOpComparator + existenceCondition + " != null && ctx." + rawSelector + " =~ /" + val + "/"
+			output = output + bOpComparator + convertedSelector + " =~ /" + val + "/"
 
 		case ast.RvalueExpression:
 			bOpComparator := ""
