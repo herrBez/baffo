@@ -220,7 +220,7 @@ func transpileRvalue(expr ast.Node) string {
 	case ast.StringAttribute:
 		return "\"" + texpr.Value() + "\""
 	case ast.Selector:
-		return toElasticPipelineSelectorCondition(texpr.String())
+		return toElasticPipelineSelectorWithNullable(texpr.String(), true)
 
 	case ast.ArrayAttribute:
 		output := "["
@@ -257,10 +257,7 @@ func transpileCondition(c ast.Condition) string {
 
 		case ast.NegativeSelectorExpression:
 			operator_converted := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
-
-			selector := transpileRvalue(texpr.Selector)
-
-			output = output + " " + operator_converted + selector + " == null"
+			output = output + "" + operator_converted + toElasticPipelineSelectorWithNullable(texpr.Selector.String(), true) + " == null"
 
 		case ast.InExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
@@ -272,7 +269,18 @@ func transpileCondition(c ast.Condition) string {
 
 		case ast.CompareExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
-			output = output + bOpComparator + "(" + transpileRvalue(texpr.LValue) + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue) + ")"
+			val := transpileRvalue(texpr.LValue)
+			// Selector is a special case that we treat differently
+			switch x := texpr.LValue.(type) {
+			case ast.Selector:
+				val = toElasticPipelineSelectorWithNullable(x.String(), true) + " != null && " + toElasticPipelineSelectorWithNullable(x.String(), false)
+			}
+
+			if bOpComparator != "" {
+				output = output + bOpComparator + "(" + val + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue) + ")"
+			} else {
+				output = output + "(" + val + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue) + ")"
+			}
 
 		case ast.RegexpExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
@@ -295,13 +303,19 @@ func transpileCondition(c ast.Condition) string {
 			output = output + bOpComparator + convertedSelector + " =~ /" + val + "/"
 
 		case ast.RvalueExpression:
-			bOpComparator := ""
+			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
 
-			if texpr.BoolExpression.BoolOperator().Op != ast.NoOperator {
-				bOpComparator = transpileBoolExpression(texpr.BoolExpression.BoolOperator())
-				output = output + bOpComparator + transpileRvalue(texpr.RValue)
+			val := transpileRvalue(texpr.RValue)
+
+			switch x := texpr.RValue.(type) {
+			case ast.Selector:
+				val = toElasticPipelineSelectorWithNullable(x.String(), true) + " != null"
+			}
+
+			if bOpComparator != "" {
+				output = output + bOpComparator + (val)
 			} else { // No Operator is provided
-				output = output + transpileRvalue(texpr.RValue) + " != null"
+				output = output + (val)
 			}
 
 		default:

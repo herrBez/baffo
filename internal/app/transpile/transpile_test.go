@@ -39,11 +39,11 @@ func TestConversionOfConditions(t *testing.T) {
 					),
 				},
 			},
-			want: `ctx?.foo != null && ctx.foo != null`,
+			want: `ctx?.foo != null`,
 		},
 		{
 			name: "Field equals value",
-			want: `ctx?.foo != null && ctx.foo == "foo"`,
+			want: `(ctx?.foo != null && ctx.foo == "foo")`,
 			// [foo] == "foo"
 			input: ast.Condition{
 				Expression: []ast.Expression{
@@ -173,15 +173,37 @@ func TestEndToEnd(t *testing.T) {
 		input string
 		want  string
 	}{
+
 		{
-			name:  "End-to-end test 1",
-			input: `[foo] == "foo"`,
-			want:  `(ctx?.foo != null && ctx.foo == "foo")`,
+			name:  "Field does not exist",
+			input: "![foo][bar]",
+			want:  "ctx?.foo?.bar == null",
 		},
 		{
-			name:  "End-to-end test 2",
-			input: `[test]`,
-			want:  `ctx?.test != null`,
+			name:  "Field equals string",
+			input: `[test] == "45"`,
+			want:  `(ctx?.test != null && ctx.test == "45")`,
+		},
+		{
+			name:  "Negation",
+			input: "!(![test] or ![foo])",
+			want:  "!(ctx?.test == null || ctx?.foo == null)",
+		},
+		{
+			name:  "Cond1 or cond2",
+			input: `[abc] == "def" or [ghi]`,
+			// Got: (ctx?.foo != null && ctx.foo == "foo") && ctx?.test != null && ctx.test
+			want: `(ctx?.abc != null && ctx.abc == "def") || ctx?.ghi != null`,
+		},
+		{
+			name:  "Field exist",
+			input: `[test][bar]`,
+			want:  `ctx?.test?.bar != null`,
+		},
+		{
+			name:  "Field with special chars exist",
+			input: `[@metadata][input]`,
+			want:  `ctx.getOrDefault('@metadata', null)?.input != null`,
 		},
 	}
 
