@@ -8,8 +8,8 @@ import (
 
 type ApplyPluginsFuncCondition func(cursor *Cursor, c Constraints, ip *IngestPipeline)
 
-func mergeWithIPFidelity(ip *IngestPipeline, tmp_ip IngestPipeline, cond *string, threshold int) {
-	if len(tmp_ip.Processors) < threshold {
+func (t Transpile) mergeWithIPFidelity(ip *IngestPipeline, tmp_ip IngestPipeline, cond *string) {
+	if len(tmp_ip.Processors) < t.threshold {
 		for _, tp := range tmp_ip.Processors {
 			ip.Processors = append(ip.Processors, tp.WithIf(cond, true))
 		}
@@ -112,7 +112,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 			}
 
 			// mergeWithIP(ip, tmp_ip, currentConstraints, t.threshold)
-			mergeWithIPFidelity(ip, tmp_ip, cond, t.threshold)
+			t.mergeWithIPFidelity(ip, tmp_ip, cond)
 
 			// Else-If
 			// else-if-1 constraint = "inherited + negate if condition"
@@ -137,7 +137,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 					cond = pointer(fmt.Sprintf("ctx.%s['%s-elseif-%d']", TRANSPILER_PREFIX, branchName, i))
 				}
 
-				mergeWithIPFidelity(ip, tmp_ip, cond, t.threshold)
+				t.mergeWithIPFidelity(ip, tmp_ip, cond)
 
 				currentConstraints = AddCondToConstraint(oldConstraints, ast.NewCondition(ast.NewNegativeConditionExpression(NotOperator, block.ElseIfBlock[i].Condition)))
 
@@ -154,7 +154,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 				cond = pointer(fmt.Sprintf("ctx.%s['%s-else']", TRANSPILER_PREFIX, branchName))
 			}
 			// mergeWithIP(ip, tmp_ip, currentConstraints, t.threshold)
-			mergeWithIPFidelity(ip, tmp_ip, cond, t.threshold)
+			t.mergeWithIPFidelity(ip, tmp_ip, cond)
 
 			c.parent[c.iter.index] = block
 
