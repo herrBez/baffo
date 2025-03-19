@@ -205,6 +205,11 @@ func TestEndToEnd(t *testing.T) {
 			input: `[@metadata][input]`,
 			want:  `ctx.getOrDefault('@metadata', null)?.input != null`,
 		},
+		{
+			name:  "Special Field exist",
+			input: `[@metadata][input] == 'test'`,
+			want:  `(ctx.getOrDefault('@metadata', null)?.input != null && ctx['@metadata'].input == "test")`,
+		},
 	}
 
 	for _, tc := range tt {

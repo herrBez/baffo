@@ -242,9 +242,7 @@ func transpileCondition(c ast.Condition) string {
 	var output string
 
 	for _, expr := range c.Expression {
-		// if i != 0 && i <= len(c.Expression)-1 {
-		// 	output += ") && ("
-		// }
+
 		log.Debug().Msgf("Here %s %s\n", expr, reflect.TypeOf(expr))
 		switch texpr := expr.(type) {
 
@@ -313,9 +311,9 @@ func transpileCondition(c ast.Condition) string {
 			}
 
 			if bOpComparator != "" {
-				output = output + bOpComparator + (val)
+				output = output + bOpComparator + "(" + val + ")"
 			} else { // No Operator is provided
-				output = output + (val)
+				output = output + "(" + val + ")"
 			}
 
 		default:
