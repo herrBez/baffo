@@ -124,6 +124,8 @@ var transpiler = map[string]map[string]TranspileProcessor{
 		"prune":      DealWithPrune,
 		"syslog_pri": DealWithSyslogPri,
 		"csv":        DealWithCSV,
+		"json":       DealWithJSON,
+		// "truncate":   DealWithTruncate,
 	},
 	"output": {
 		"elasticsearch": DealWithOutputElasticsearch,
@@ -149,6 +151,14 @@ func transpileBoolExpression(bo ast.BooleanOperator) string {
 	}
 
 	return ""
+}
+
+func returnSubFields(sel string) []string {
+	if sel[0] == '[' && sel[len(sel)-1] == ']' {
+		return strings.Split(sel[1:len(sel)-1], "][")
+	} else {
+		return []string{sel}
+	}
 }
 
 // This function converts a selector (e.g., [foo][bar]) to its Painless correspondent.
@@ -261,11 +271,11 @@ func transpileCondition(c ast.Condition) string {
 
 		case ast.InExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
-			output = output + bOpComparator + transpileRvalue(texpr.LValue) + ".contains(" + transpileRvalue(texpr.RValue) + ")"
+			output = output + bOpComparator + transpileRvalue(texpr.RValue) + ".contains(" + transpileRvalue(texpr.LValue) + ")"
 
 		case ast.NotInExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
-			output = output + "!" + bOpComparator + transpileRvalue(texpr.LValue) + ".contains(" + transpileRvalue(texpr.RValue) + ")"
+			output = output + "!" + bOpComparator + transpileRvalue(texpr.RValue) + ".contains(" + transpileRvalue(texpr.LValue) + ")"
 
 		case ast.CompareExpression:
 			bOpComparator := transpileBoolExpression(texpr.BoolExpression.BoolOperator())
@@ -406,7 +416,7 @@ else {
 			}
 
 		default: // uppercase/lowercase require an Array
-			log.Printf("Mutate filter attribute '%s' not supported", attr.Name())
+			log.Warn().Msgf("Mutate filter attribute '%s' not supported", attr.Name())
 		}
 
 	case "gsub":
@@ -417,7 +427,7 @@ else {
 			gsubexpression := getArrayStringAttributes(tAttributes)
 
 			if len(gsubexpression)%3 != 0 {
-				log.Printf("Gsub expects triplets of (field, pattern, replacement), while %d params are given", len(gsubexpression))
+				log.Warn().Msgf("Gsub expects triplets of (field, pattern, replacement), while %d params are given", len(gsubexpression))
 			}
 
 			for i := 0; i < len(gsubexpression); i += 3 {
@@ -500,7 +510,7 @@ else {
 		}
 
 	case "update":
-		keys, values := getHashAttributeKeyValue(attr)
+		keys, values := getHashAttributeKeyValueUntyped(attr)
 		for i := range keys {
 			ingestProcessors = append(ingestProcessors,
 				SetProcessor{
@@ -511,7 +521,7 @@ else {
 		}
 
 	default:
-		log.Printf("Mutate of type '%s' not supported", attr.Name())
+		log.Warn().Msgf("Mutate of type '%s' not supported", attr.Name())
 
 	}
 
@@ -715,11 +725,18 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 		switch attr.Name() {
 		// It is a common field
 		case "add_field":
-			keys, values := getHashAttributeKeyValue(attr)
+			keys, values := getHashAttributeKeyValueUntyped(attr)
 
 			for i := range keys {
 
-				value, _ := toElasticPipelineSelectorExpression(values[i], ProcessorContext)
+				var value interface{}
+
+				switch values[i].(type) {
+				case string:
+					value, _ = toElasticPipelineSelectorExpression(values[i].(string), ProcessorContext)
+				default:
+					value = values[i]
+				}
 
 				ingestProcessors = append(ingestProcessors,
 					SetProcessor{
@@ -730,6 +747,9 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 			}
 		case "remove_field":
 			fields := getArrayStringAttributeOrStringAttrubute(attr)
+			for i := range fields {
+				fields[i] = toElasticPipelineSelector(fields[i])
+			}
 			ingestProcessors = append(ingestProcessors,
 				RemoveProcessor{
 					Field: &fields,
@@ -760,7 +780,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 		case "enable_metric", "periodic_flush": // N/A
 
 		default:
-			log.Printf("Remove Tag (%s) is not yet supported", attr.Name())
+			log.Warn().Msgf("Remove Tag (%s) is not yet supported", attr.Name())
 
 		}
 	}
@@ -789,7 +809,7 @@ func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		// Add if condition
 
 		default:
-			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+			log.Warn().Msgf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
 	}
 
@@ -815,10 +835,10 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		case "target":
 			proc.TargetField = pointer(getStringAttributeString(attr))
 		case "locale":
-			log.Printf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
+			log.Warn().Msgf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
 			proc.Locale = pointer(getStringAttributeString(attr))
 		case "timezone":
-			log.Printf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
+			log.Warn().Msgf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
 			proc.Timezone = pointer(getStringAttributeString(attr))
 
 		case "match":
@@ -827,7 +847,7 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 			proc.Formats = matchArray[1:]
 
 		default:
-			log.Printf("Attribute '%s' is currently not supported", attr.Name())
+			log.Warn().Msgf("Attribute '%s' is currently not supported", attr.Name())
 
 		}
 	}
@@ -864,7 +884,7 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 			onFailurePorcessors = DealWithTagOnFailure(attr, id, t)
 
 		default:
-			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
+			log.Warn().Msgf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
 		}
 	}
@@ -948,7 +968,7 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 			uap.TargetField = pointer(toElasticPipelineSelector(getStringAttributeString(attr)))
 
 		default:
-			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
+			log.Warn().Msgf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
 		}
 	}
@@ -1077,7 +1097,7 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 			break_on_match = getBoolValue(attr)
 
 		default:
-			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
+			log.Warn().Msgf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
 		}
 	}
@@ -1115,7 +1135,7 @@ func DealWithURLDecode(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 		case "field":
 			udp.Field = getStringAttributeString(attr)
 		default:
-			log.Printf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
+			log.Warn().Msgf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
 		}
 	}
@@ -1194,6 +1214,27 @@ throw new Exception("Could not find CIDR value");
 	return ingestProcessors, onFailureProcessor
 }
 
+// func DealWithTruncate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+// 	ingestProcessors := []IngestProcessor{}
+// 	onFailureProcessor := []IngestProcessor{}
+// 	var fields []string
+// 	var lengthBytes uint64
+// 	var err error
+// 	for _, attr := range plugin.Attributes {
+// 		switch attr.Name() {
+// 		case "fields":
+// 			fields = getArrayStringAttributeOrStringAttrubute(attr)
+// 		case "length_bytes":
+// 			rawLengthBytes := getStringAttributeString(attr)
+// 			lengthBytes, err = strconv.ParseUint(rawLengthBytes, 10, 64)
+// 			if err != nil {
+// 				log.Warn().Msgf("[Plugin %s] the lengthBytes should be an integer %v", plugin.Name(), err)
+// 			}
+// 		}
+// 	}
+
+// }
+
 func DealWithSyslogPri(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessor := []IngestProcessor{}
@@ -1229,34 +1270,22 @@ func DealWithSyslogPri(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 
 	log.Warn().Msgf("[Plugin %s] The Ingest processor script assumes that the field pri is already numeric and does not attempt to deal with other types", plugin.Name())
 	extractValue := fmt.Sprintf(`
-int pri = 13;
-if (%s) {
-	pri = %s;
-}
+int pri = $('%s', 13);
 int severity = pri & 0x7;
 int facility = pri / 8;
-`, getIfFieldDefined(*field), *field)
+`, *field)
 
 	if ECSCompatibility == "disabled" {
 		setValuesString = `ctx.syslog_severity_code = severity;
-ctx.syslog_facility_code = facility;
-		`
+ctx.syslog_facility_code = facility;`
 	} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
 		setValuesString = `/* Make sure log.syslog.facility, log.syslog.priority are defined Maps */
-if (!ctx.containsKey('log')) {
-	ctx["log"] = [:];
-}
-if (!ctx["log"].containsKey('syslog')) {
-	ctx["log"]["syslog"] = [:];
-}
-if (!ctx["log"]["syslog"].containsKey('facility')) {
-	ctx["log"]["syslog"]["facility"] = [:];
-}
-if (!ctx["log"]["syslog"].containsKey('severity')) {
-	ctx["log"]["syslog"]["severity"] = [:];
-}
-ctx["log"]["syslog"]["severity"]["name"] = params.severity[severity];
-ctx["log"]["syslog"]["severity"]["code"] = severity;
+ctx.putIfAbsent('log', [:]);
+ctx.log.putIfAbsent('syslog', [:]);
+ctx.log.syslog.putIfAbsent('facility', [:]);
+ctx.log.syslog.putIfAbsent('severity', [:]);
+ctx.log.syslog.severity.name = params.severity[severity];
+ctx.log.syslog.severity.code = severity;
 `
 	}
 
@@ -1266,8 +1295,8 @@ ctx["log"]["syslog"]["severity"]["code"] = severity;
 ctx.syslog_severity_name = params.severity[severity];
 		`
 	} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
-		useLabelsScript = `ctx["log"]["syslog"]["facility"]["name"] = params.facility[facility];
-ctx["log"]["syslog"]["facility"]["code"] = facility;`
+		useLabelsScript = `ctx.log.syslog.facility.name = params.facility[facility];
+ctx.log.syslog.facility.name = facility;`
 	}
 
 	proc := ScriptProcessor{}.WithTag(id).(ScriptProcessor)
@@ -1438,7 +1467,7 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 		case "value_split":
 			kv.ValueSplit = getStringAttributeString(attr)
 		default:
-			log.Printf("Attribute '%s' is currently not supported", attr.Name())
+			log.Warn().Msgf("Attribute '%s' is currently not supported", attr.Name())
 
 		}
 	}
@@ -1451,9 +1480,39 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 	return ingestProcessors, onFailureProcessors
 }
 
+func DealWithJSON(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+	ingestProcessors := []IngestProcessor{}
+	onFailureProcessors := []IngestProcessor{}
+
+	json := JSONProcessor{}.WithTag(id).(JSONProcessor)
+
+	for _, attr := range plugin.Attributes {
+		if Contains(CommonAttributes, attr.Name()) {
+			continue
+		}
+		switch attr.Name() {
+		case "source":
+			json.Field = getStringAttributeString(attr)
+		case "target":
+			json.TargetField = getStringAttributeString(attr)
+		default:
+			log.Warn().Msgf("Attribute '%s' is currently not supported", attr.Name())
+
+		}
+	}
+	// Add _kv_filter_error
+	if len(json.OnFailure) == 0 {
+		onFailureProcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_jsonparsefailure", ast.DoubleQuoted)), id, t)
+	}
+	ingestProcessors = append(ingestProcessors, json)
+
+	return ingestProcessors, onFailureProcessors
+}
+
 func DealWithDissect(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
+	onSuccessProcessors := []IngestProcessor{}
 
 	proc := DissectProcessor{
 		// Dissect in Logstash always add a space in the appended information
@@ -1465,15 +1524,37 @@ func DealWithDissect(plugin ast.Plugin, id string, t Transpile) ([]IngestProcess
 		// It is a common field
 		case "tag_on_failure":
 			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
+		case "convert_datatype":
+			convertKeys, convertValues := getHashAttributeKeyValue(attr)
+			convertdatatypeMap := map[string]string{
+				"int":   "integer",
+				"float": "float",
+			}
+			for i := range convertKeys {
+				ttype := convertValues[i]
+
+				cType, ok := convertdatatypeMap[ttype]
+
+				if !ok {
+					log.Warn().Msgf("Type %s not yet supported in convert_datatype", ttype)
+				} else {
+					onSuccessProcessors = append(onSuccessProcessors, ConvertProcessor{
+						Field: convertKeys[i],
+						Type:  cType,
+					})
+				}
+
+			}
+
 		case "mapping":
 			keys, values := getHashAttributeKeyValue(attr)
 			if len(keys) != 1 {
-				log.Printf("[Pos %s][Plugin %s] Attribute '%s' only one map is supported. Consider splitting the original in two dissect filters", plugin.Pos(), plugin.Name(), attr.Name())
+				log.Warn().Msgf("[Pos %s][Plugin %s] Attribute '%s' only one map is supported. Consider splitting the original in two dissect filters", plugin.Pos(), plugin.Name(), attr.Name())
 			}
 			proc.Field = keys[0]
 			proc.Pattern, _ = toElasticPipelineSelectorExpression(values[0], DissectContext)
 		default:
-			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+			log.Warn().Msgf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
 	}
 	// Add dissect failure default tag
@@ -1482,6 +1563,7 @@ func DealWithDissect(plugin ast.Plugin, id string, t Transpile) ([]IngestProcess
 	}
 
 	ingestProcessors = append(ingestProcessors, proc)
+	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
 	return ingestProcessors, onFailureProcessors
 }
 
@@ -1510,7 +1592,7 @@ func DealWithOutputPipeline(plugin ast.Plugin, id string, t Transpile) ([]Ingest
 			}
 
 		default:
-			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+			log.Warn().Msgf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
 
 	}
@@ -1567,13 +1649,19 @@ func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, 
 
 	proc := CSVProcessor{Field: "message", EmptyValue: pointer("")}.WithTag(id).(CSVProcessor)
 
+	prefix := ""
+
+	autodetect_column_names := false
+
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
 		case "source":
 			proc.Field = getStringAttributeString(attr)
 
 		case "columns":
-			proc.TargetField = getArrayStringAttributes(attr)
+			proc.TargetFields = getArrayStringAttributeOrStringAttrubute(attr)
+		case "autodetect_column_names":
+			autodetect_column_names = getBoolValue(attr)
 		case "separator":
 			proc.Separator = pointer(getStringAttributeString(attr))
 		case "quote_char":
@@ -1591,24 +1679,37 @@ func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, 
 			keys, values := getHashAttributeKeyValue(attr)
 			for i := range keys {
 				switch values[i] {
-				case "date":
-					log.Warn().Msgf("Date is not yet supported")
-				case "date_time":
-					log.Warn().Msgf("Date is not yet supported")
+
 				case "integer":
 					onSuccessProcessors = append(onSuccessProcessors, ConvertProcessor{Field: keys[i], Type: values[i]})
 				case "float":
 					onSuccessProcessors = append(onSuccessProcessors, ConvertProcessor{Field: keys[i], Type: values[i]})
-
+				default:
+					log.Warn().Msgf("Convert: %s is not yet supported", values[i])
 				}
 
 				onSuccessProcessors = append(onSuccessProcessors, ConvertProcessor{Field: keys[i], Type: values[i]})
 			}
 
+		case "target":
+			prefix = getStringAttributeString(attr)
+
 		default:
 			log.Warn().Msgf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
 	}
+
+	if autodetect_column_names {
+		log.Warn().Msgf("[Pos %s][Plugin %s] Autodetect column names (true) is not supported by Elasticsearch. Consider adding explicitely the columns", plugin.Pos(), plugin.Name())
+	}
+
+	// Apply the target if present
+	if prefix != "" {
+		for i := range proc.TargetFields {
+			proc.TargetFields[i] = prefix + "." + proc.TargetFields[i]
+		}
+	}
+
 	ingestProcessors = append(ingestProcessors, proc)
 	ingestProcessors = append(ingestProcessors, onSuccessProcessors...)
 	return ingestProcessors, onFailureProcessors
@@ -1653,7 +1754,7 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 			params["fallback"] = getStringAttributeString(attr)
 
 		default:
-			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+			log.Warn().Msgf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
 	}
 	// Post-Condition: Given that source is mandatory, source variable will always be a string
@@ -1671,17 +1772,32 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 
 	var b bytes.Buffer
 
-	field := toElasticPipelineSelectorCondition(*source)
+	// field := toElasticPipelineSelectorCondition(*source)
+	field := toElasticPipelineSelector(*source)
 
-	b.WriteString(fmt.Sprintf(`def tmp = params.dictionary[%s.toString()];`, field))
+	b.WriteString(fmt.Sprintf(`def tmp = params.dictionary[$('%s', '')];`, field))
 
 	if _, ok := params["fallback"]; ok {
 		b.WriteString(`if (tmp == null) { tmp = params.fallback; }`)
 	}
 
-	fieldToAssign := toElasticPipelineSelector(*target)
+	fieldToAssign := toElasticPipelineSelectorWithNullable(*target, false)
+	// fieldToAssign := toElasticPipelineSelectorCondition(*target)
 
-	b.WriteString(fmt.Sprintf(`if (tmp != null) { ctx.%s = tmp; }`, fieldToAssign))
+	// TODO: Add the creation of the substructure
+	// createSubStructure := ""
+	// subFields := returnSubFields(*target)
+	// currentPath := ""
+	// currentLogstashPath := ""
+	// for i, f := range subFields {
+	// 	if i == 0 {
+	// 		currentLogstashPath += "[" + f + "]"
+	// 	} else if i > 0 && i < len(subFields)-1 {
+	// 		createSubStructure += fmt.Sprintf("; ctx.%s.putIfAbsent('%s', [:])", createSubStructure, toElasticPipelineSelectorWithNullable(currentLogstashPath, false), f)
+	// 	}
+	// }
+
+	b.WriteString(fmt.Sprintf(`if (tmp != null) { %s = tmp; }`, fieldToAssign))
 
 	proc.Source = pointer(b.String())
 
@@ -1700,7 +1816,7 @@ func DealWithMissingTranspiler(plugin ast.Plugin, constraint Constraints) []Inge
 		constraintTranspiled = &tmp
 	}
 
-	log.Printf("[WARN] Plugin %s is not yet supported. Consider Making a contribution :)\n", plugin.Name())
+	log.Warn().Msgf("[WARN] Plugin %s is not yet supported. Consider Making a contribution :)\n", plugin.Name())
 
 	return []IngestProcessor{}
 }
@@ -1734,7 +1850,7 @@ func DealWithOutputElasticsearch(plugin ast.Plugin, id string, t Transpile) ([]I
 			})
 
 		default:
-			log.Printf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
+			log.Warn().Msgf("[Pos %s][Plugin %s] Attribute '%s' is currently not supported", plugin.Pos(), plugin.Name(), attr.Name())
 		}
 
 	}
@@ -1770,21 +1886,23 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 
 	// apply func returns an ApplyPluginsFuncCondition object depending on the section
 	applyFunc := func(section string) ApplyPluginsFuncCondition {
+		var i int = 0
 		return func(c *Cursor, constraint Constraints, ip *IngestPipeline) {
 			log.Debug().Msgf(section)
 
 			ip.Processors = append(ip.Processors, t.DealWithPlugin(section, *c.Plugin(), constraint)...)
 
 			plugin_names = append(plugin_names, c.Plugin().Name())
+			i += 1
 		}
 	}
 
 	for _, f := range c.Filter {
 		t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("filter"), &ip)
 	}
-	for _, f := range c.Output {
-		t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"), &ip)
-	}
+	// for _, f := range c.Output {
+	// 	t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"), &ip)
+	// }
 
 	ips := getAllIngestPipeline(ip)
 

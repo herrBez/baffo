@@ -184,13 +184,13 @@ func (cf CommonFields) GetDescriptionOrDefault(str string) string {
 }
 
 type SetProcessor struct {
-	Value            string `json:"value,omitempty"`
-	Field            string `json:"field"`
-	CopyFrom         string `json:"copy_from,omitempty"`
-	Override         bool   `json:"override,omitempty"`
-	IgnoreEmptyValue bool   `json:"ignore_empty_value,omitempty"`
-	MediaType        string `json:"media_type,omitempty"`
-	IgnoreFailure    bool   `json:"ignore_failure,omitempty"`
+	Value            interface{} `json:"value,omitempty"`
+	Field            string      `json:"field"`
+	CopyFrom         string      `json:"copy_from,omitempty"`
+	Override         bool        `json:"override,omitempty"`
+	IgnoreEmptyValue bool        `json:"ignore_empty_value,omitempty"`
+	MediaType        string      `json:"media_type,omitempty"`
+	IgnoreFailure    bool        `json:"ignore_failure,omitempty"`
 	CommonFields
 }
 
@@ -1243,7 +1243,7 @@ var LogstashCSVConvertToConvertProcessorType = map[string]string{
 
 type CSVProcessor struct {
 	Field         string   `json:"field"`
-	TargetField   []string `json:"target_field,omitempty"`
+	TargetFields  []string `json:"target_fields,omitempty"`
 	Separator     *string  `json:"separator,omitempty"`
 	Quote         *string  `json:"quote,omitempty"`
 	IgnoreMissing *bool    `json:"ignore_missing,omitempty"`
@@ -1291,6 +1291,60 @@ func (sp CSVProcessor) WithTag(tag string) IngestProcessor {
 }
 
 func (sp CSVProcessor) WithDescription(description string) IngestProcessor {
+	sp.Description = pointer(description)
+	return sp
+}
+
+type JSONProcessor struct {
+	Field                     string `json:"field"`
+	TargetField               string `json:"target_field,omitempty"`
+	AddToRoot                 bool   `json:"add_to_root,omitempty"`
+	AddToRootConflictStrategy bool   `json:"add_to_root_conflict_strategy,omitempty"`
+	AllowDuplicateKeys        bool   `json:"add_duplicate_keys,omitempty"`
+	StrictJsonParsing         bool   `json:"strict_json_parsing,omitempty"`
+	IgnoreMissing             *bool  `json:"ignore_missing,omitempty"`
+	IgnoreFailure             *bool  `json:"ignore_failure,omitempty"`
+	CommonFields
+}
+
+func (ip JSONProcessor) MarshalJSON() ([]byte, error) {
+	type JSONProcessorAlias JSONProcessor
+
+	return MyJsonEncode(
+		map[string]JSONProcessorAlias{
+			ip.IngestProcessorType(): (JSONProcessorAlias)(ip),
+		},
+	)
+}
+
+func (sp JSONProcessor) String() string {
+	return StringHelper(sp)
+}
+
+func (sp JSONProcessor) IngestProcessorType() string {
+	return "json"
+}
+
+func (sp JSONProcessor) WithIf(s *string, append bool) IngestProcessor {
+	if append {
+		sp.If = AppendIf(sp.If, s)
+	} else {
+		sp.If = s
+	}
+	return sp
+}
+
+func (sp JSONProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
+	sp.OnFailure = s
+	return sp
+}
+
+func (sp JSONProcessor) WithTag(tag string) IngestProcessor {
+	sp.Tag = pointer(tag)
+	return sp
+}
+
+func (sp JSONProcessor) WithDescription(description string) IngestProcessor {
 	sp.Description = pointer(description)
 	return sp
 }
