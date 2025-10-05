@@ -8,10 +8,10 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 
-	config "github.com/breml/logstash-config"
-	"github.com/breml/logstash-config/ast"
-	"github.com/breml/logstash-config/ast/astutil"
-	"github.com/breml/logstash-config/internal/format"
+	config "github.com/herrBez/logstash-config"
+	"github.com/herrBez/logstash-config/ast"
+	"github.com/herrBez/logstash-config/ast/astutil"
+	"github.com/herrBez/logstash-config/internal/format"
 )
 
 type Lint struct {
@@ -64,9 +64,6 @@ func (l Lint) Run(args []string) error {
 		for i := range conf.Filter {
 			astutil.ApplyPlugins(conf.Filter[i].BranchOrPlugins, v.walk)
 		}
-
-
-		
 
 		for i := range conf.Output {
 			astutil.ApplyPlugins(conf.Output[i].BranchOrPlugins, v.walk)

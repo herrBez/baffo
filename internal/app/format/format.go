@@ -8,8 +8,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	config "github.com/breml/logstash-config"
-	"github.com/breml/logstash-config/ast"
+	config "github.com/herrBez/logstash-config"
+	"github.com/herrBez/logstash-config/ast"
 )
 
 type Format struct {

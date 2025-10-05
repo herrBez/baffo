@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	ast "github.com/breml/logstash-config/ast"
+	ast "github.com/herrBez/logstash-config/ast"
 )
 
 type Constraints struct {

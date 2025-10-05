@@ -3,7 +3,7 @@ package transpile
 import (
 	"strconv"
 
-	ast "github.com/breml/logstash-config/ast"
+	ast "github.com/herrBez/logstash-config/ast"
 	"github.com/rs/zerolog/log"
 )
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/breml/logstash-config"
-	"github.com/breml/logstash-config/ast"
+	. "github.com/herrBez/logstash-config"
+	"github.com/herrBez/logstash-config/ast"
 )
 
 func ExampleParseReader() {
