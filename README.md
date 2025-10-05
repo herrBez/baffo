@@ -93,12 +93,12 @@ baffo lint --auto-fix-id file.conf
 
 #### format
 
-With the `format` command, mustache returns the provided configuration files in a standardized format (indentation,
+With the `format` command, baffo returns the provided configuration files in a standardized format (indentation,
 location of comments). By default, the reformatted file is print to standard out. If the flag `--write-to-source`
 is provided, the Logstash config files are reformatted in place.
 
 ```shell
-mustache format --write-to-source file.conf
+baffo format --write-to-source file.conf
 ```
 
 Use the `--help` flag to get more information about the usage of the tool.
