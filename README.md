@@ -65,6 +65,12 @@ baffo transpile file.conf \
 > ⚠️ Disclaimer: Semantic equivalence between the input Logstash pipelines and the generated Elasticsearch ingest pipelines is not formally guaranteed. The output should not be used in production without careful review and testing.
 
 
+If you need a quick conversion without bothering creating a file you can:
+
+```
+baffo transpile /dev/stdin --deal_with_error_locally=false --pipeline_threshold 10 --add_default_global_on_failure=true --fidelity=false <<< 'filter{ mutate { add_field => {"[test]" => "foo"}}}'
+```
+
 #### Check 
 
 The `check` command verifies the syntax of Logstash configuration files:
