@@ -1,37 +1,76 @@
-# logstash-config : parser and abstract syntax tree for [Logstash](https://www.elastic.co/logstash/) config files
+# Baffo
+
+A **fork of [logstash-config](https://github.com/breml/logstash-config)** with a new `transpile` command that converts **Logstash Pipelines** into **Elasticsearch Ingest Pipeline syntax**.
 
 [![Test Status](https://github.com/herrBez/baffo/workflows/Test/badge.svg)](https://github.com/herrBez/baffo/actions?query=workflow%3ATest)
- [![Go Report Card](https://goreportcard.com/badge/github.com/herrBez/baffo)](https://goreportcard.com/report/github.com/herrBez/baffo)\
-[![GoDoc](https://pkg.go.dev/badge/github.com/herrBez/baffo)](https://pkg.go.dev/github.com/herrBez/baffo) [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/herrBez/baffo)](https://goreportcard.com/report/github.com/herrBez/baffo)
+[![GoDoc](https://pkg.go.dev/badge/github.com/herrBez/baffo)](https://pkg.go.dev/github.com/herrBez/baffo)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
+
+---
 
 ## Overview
 
-The Go package config provides a ready to use parser for Logstash ([github](https://github.com/elastic/logstash)) configuration files.
+`baffo` provides a Go parser for Logstash configuration files, based on the original [Logstash Treetop grammar](https://github.com/elastic/logstash/blob/master/logstash-core/lib/logstash/config/grammar.treetop).  
+It uses [pigeon](https://github.com/mna/pigeon) to generate the parser from a PEG (Parsing Expression Grammar).
 
-The basis of the grammar for the parsing of the Logstash configuration format is the original [Logstash Treetop grammar](https://github.com/elastic/logstash/blob/master/logstash-core/lib/logstash/config/grammar.treetop) which could be used with only minor changes.
+This fork adds the **`transpile` command**, allowing you to convert existing Logstash pipelines into Elasticsearch ingest pipelines — no temporary files needed.
 
-logstash-config uses [pigeon](https://github.com/mna/pigeon) to generate the parser from the PEG (parser expression grammar). Special thanks to Martin Angers ([mna](https://github.com/mna)).
+> ⚠️ This package is under active development. API stability is **not guaranteed**.
 
-This package is currently under development, no API guaranties.
+---
 
 ## Install
 
 ```bash
-go get -t github.com/herrBez/baffo/...
+go install github.com/herrBez/baffo/cmd/baffo@latest
 ```
 
-## Usage
 
-### mustache
+## Name overview
 
-`mustache` is a command line tool that allows to syntax check, lint and format Logstash configuration files. The name of
-the tool is inspired by the original Logstash Logo ([wooden character with an eye-catching mustache](https://www.elastic.co/de/blog/high-level-logstash-roadmap-is-published)).
+The word `baffo` means `moustache` in Italian, chosen to clearly indicate that this project is a fork of the original Mustache. The original name is inspired by the original Logstash Logo ([wooden character with an eye-catching mustache](https://www.elastic.co/de/blog/high-level-logstash-roadmap-is-published)).
+
+
+### Baffo
+
+`baffo` is a CLI tool to check, lint, format, and transpile Logstash configuration files.
+
+#### Transpile
+
+The `transpile` command transpiles a Logstash Pipelines to one or more Elasticsearch Ingest Pipelines:
+
+```shell
+baffo transpile file.conf
+```
+
+
+For the transpilation we have different flags at disposal:
+
+- `add_default_global_on_failure`: whether to add a default global on failure processor
+- `deal_with_error_locally`: whether to deal with the errors locally à là Logstash (e.g., by adding the tag on error by default)
+- `fidelity`: whether we want to keep the correct the if-else semantic, i.e., calculating the condition only once
+- `pipeline_threshold`: determine how many processors will cause the creation of a new pipeline when converting if-else statements
+
+By default, we try to keep the semantics as close as possible with the original Logstash Pipeline. To obtain idiomatic pipelines, consider using the following settings:
+
+```
+baffo transpile file.conf \
+  --deal_with_error_locally=false \
+  --pipeline_threshold=10 \
+  --add_default_global_on_failure=true \
+  --fidelity=false
+```
+
+#### Check 
 
 The `check` command verifies the syntax of Logstash configuration files:
 
 ```shell
-mustache check file.conf
+baffo check file.conf
 ```
+
+#### Lint
 
 The `lint` command checks for problems in Logstash configuration files.
 
@@ -46,8 +85,10 @@ If the `--auto-fix-id` flag is passed, each plugin gets automatically an ID. Be 
 the Logstash configuration files.
 
 ```shell
-mustache lint --auto-fix-id file.conf
+baffo lint --auto-fix-id file.conf
 ```
+
+#### format
 
 With the `format` command, mustache returns the provided configuration files in a standardized format (indentation,
 location of comments). By default, the reformatted file is print to standard out. If the flag `--write-to-source`
@@ -64,9 +105,11 @@ Use the `--help` flag to get more information about the usage of the tool.
 1. Get and install [pigeon](https://github.com/mna/pigeon).
 2. Run `go generate` in the root directory of this repository.
 
-## Author
+## Author/Attribution
 
-Copyright 2017-2021 by Lucas Bremgartner ([breml](https://github.com/breml))
+The project is a fork of [Logstash Config](https://github.com/breml/logstash-config) by Lucas Bremgartner ([breml](https://github.com/breml))
+
+This fork adds transpile support for Elasticsearch ingest pipelines.
 
 ## License
 
