@@ -3,7 +3,7 @@ package astutil_test
 import (
 	"testing"
 
-	"github.com/herrBez/logstash-config/ast/astutil"
+	"github.com/herrBez/baffo/ast/astutil"
 )
 
 var tt = []struct {

@@ -7,8 +7,8 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 
-	config "github.com/herrBez/logstash-config"
-	"github.com/herrBez/logstash-config/internal/format"
+	config "github.com/herrBez/baffo"
+	"github.com/herrBez/baffo/internal/format"
 )
 
 type Check struct{}

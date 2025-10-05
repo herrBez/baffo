@@ -3,7 +3,7 @@ package app
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/herrBez/logstash-config/internal/app/transpile"
+	"github.com/herrBez/baffo/internal/app/transpile"
 )
 
 func makeTranspileCmd() *cobra.Command {

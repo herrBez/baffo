@@ -3,7 +3,7 @@ package transpile
 import (
 	"fmt"
 
-	ast "github.com/herrBez/logstash-config/ast"
+	ast "github.com/herrBez/baffo/ast"
 )
 
 type ApplyPluginsFuncCondition func(cursor *Cursor, c Constraints, ip *IngestPipeline)

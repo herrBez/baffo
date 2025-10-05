@@ -17,7 +17,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/herrBez/logstash-config/ast"
+	"github.com/herrBez/baffo/ast"
 )
 
 var g = &grammar{

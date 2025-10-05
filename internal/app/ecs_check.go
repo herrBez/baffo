@@ -3,7 +3,7 @@ package app
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/herrBez/logstash-config/internal/app/ecs_check"
+	"github.com/herrBez/baffo/internal/app/ecs_check"
 )
 
 func makeECSCheckCmd() *cobra.Command {

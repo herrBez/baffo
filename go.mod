@@ -1,4 +1,4 @@
-module github.com/herrBez/logstash-config
+module github.com/herrBez/baffo
 
 go 1.24.7
 
@@ -12,9 +12,10 @@ require (
 	go.elastic.co/ecszerolog v0.2.0
 )
 
+require github.com/hashicorp/errwrap v1.0.0 // indirect
+
 require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect

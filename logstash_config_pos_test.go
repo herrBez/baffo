@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/herrBez/logstash-config"
-	"github.com/herrBez/logstash-config/ast"
+	. "github.com/herrBez/baffo"
+	"github.com/herrBez/baffo/ast"
 )
 
 func TestPos(t *testing.T) {

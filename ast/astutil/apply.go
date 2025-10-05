@@ -3,7 +3,7 @@ package astutil
 import (
 	"fmt"
 
-	"github.com/herrBez/logstash-config/ast"
+	"github.com/herrBez/baffo/ast"
 )
 
 // An ApplyPluginsFunc is invoked by ApplyPlugins for each plugin p, even if p

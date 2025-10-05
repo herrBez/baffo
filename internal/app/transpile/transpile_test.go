@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	config "github.com/herrBez/logstash-config"
-	ast "github.com/herrBez/logstash-config/ast"
+	config "github.com/herrBez/baffo"
+	ast "github.com/herrBez/baffo/ast"
 	"github.com/rs/zerolog/log"
 )
 

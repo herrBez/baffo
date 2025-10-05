@@ -3,7 +3,7 @@ package app
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/herrBez/logstash-config/internal/app/lint"
+	"github.com/herrBez/baffo/internal/app/lint"
 )
 
 func makeLintCmd() *cobra.Command {

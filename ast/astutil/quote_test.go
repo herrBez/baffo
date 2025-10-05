@@ -3,8 +3,8 @@ package astutil_test
 import (
 	"testing"
 
-	"github.com/herrBez/logstash-config/ast"
-	"github.com/herrBez/logstash-config/ast/astutil"
+	"github.com/herrBez/baffo/ast"
+	"github.com/herrBez/baffo/ast/astutil"
 )
 
 func TestQuote(t *testing.T) {

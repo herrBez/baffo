@@ -1,8 +1,8 @@
 # logstash-config : parser and abstract syntax tree for [Logstash](https://www.elastic.co/logstash/) config files
 
-[![Test Status](https://github.com/herrBez/logstash-config/workflows/Test/badge.svg)](https://github.com/herrBez/logstash-config/actions?query=workflow%3ATest)
- [![Go Report Card](https://goreportcard.com/badge/github.com/herrBez/logstash-config)](https://goreportcard.com/report/github.com/herrBez/logstash-config)\
-[![GoDoc](https://pkg.go.dev/badge/github.com/herrBez/logstash-config)](https://pkg.go.dev/github.com/herrBez/logstash-config) [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
+[![Test Status](https://github.com/herrBez/baffo/workflows/Test/badge.svg)](https://github.com/herrBez/baffo/actions?query=workflow%3ATest)
+ [![Go Report Card](https://goreportcard.com/badge/github.com/herrBez/baffo)](https://goreportcard.com/report/github.com/herrBez/baffo)\
+[![GoDoc](https://pkg.go.dev/badge/github.com/herrBez/baffo)](https://pkg.go.dev/github.com/herrBez/baffo) [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 
 ## Overview
 
@@ -17,7 +17,7 @@ This package is currently under development, no API guaranties.
 ## Install
 
 ```bash
-go get -t github.com/herrBez/logstash-config/...
+go get -t github.com/herrBez/baffo/...
 ```
 
 ## Usage

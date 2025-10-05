@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/herrBez/logstash-config/internal/app"
+	"github.com/herrBez/baffo/internal/app"
 )
 
 var Version = "(unknown)"

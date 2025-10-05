@@ -5,7 +5,7 @@ import (
 	"errors"
 	"regexp"
 
-	"github.com/herrBez/logstash-config/ast"
+	"github.com/herrBez/baffo/ast"
 )
 
 var barewordRe = regexp.MustCompile("(?s:^[A-Za-z_][A-Za-z0-9_]+$)")

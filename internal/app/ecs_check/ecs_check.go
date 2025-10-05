@@ -6,17 +6,17 @@ import (
 
 	// "strings"
 	// "fmt"
-	"github.com/herrBez/logstash-config/ast/astutil"
+	"github.com/herrBez/baffo/ast/astutil"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 
 	"reflect"
 
-	config "github.com/herrBez/logstash-config"
-	"github.com/herrBez/logstash-config/internal/format"
+	config "github.com/herrBez/baffo"
+	"github.com/herrBez/baffo/internal/format"
 
-	ast "github.com/herrBez/logstash-config/ast"
+	ast "github.com/herrBez/baffo/ast"
 )
 
 type ECSCheck struct{}

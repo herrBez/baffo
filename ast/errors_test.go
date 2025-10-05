@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/herrBez/logstash-config/ast"
+	"github.com/herrBez/baffo/ast"
 )
 
 func TestNotFoundError(t *testing.T) {
