@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/breml/logstash-config/ast"
-	"github.com/breml/logstash-config/ast/astutil"
+	"github.com/herrBez/logstash-config/ast"
+	"github.com/herrBez/logstash-config/ast/astutil"
 )
 
 func TestApplyPlugins_Walk(t *testing.T) {

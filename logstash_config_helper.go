@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/breml/logstash-config/ast"
+	"github.com/herrBez/logstash-config/ast"
 )
 
 type exceptionalCommentsWarnings []string

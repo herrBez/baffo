@@ -3,7 +3,7 @@ package ast_test
 import (
 	"testing"
 
-	. "github.com/breml/logstash-config/ast"
+	. "github.com/herrBez/logstash-config/ast"
 )
 
 func TestAst(t *testing.T) {

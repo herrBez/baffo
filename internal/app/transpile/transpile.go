@@ -19,10 +19,10 @@ import (
 
 	"reflect"
 
-	config "github.com/breml/logstash-config"
-	"github.com/breml/logstash-config/internal/format"
+	config "github.com/herrBez/logstash-config"
+	"github.com/herrBez/logstash-config/internal/format"
 
-	ast "github.com/breml/logstash-config/ast"
+	ast "github.com/herrBez/logstash-config/ast"
 
 	"math/rand"
 )
