@@ -1,6 +1,8 @@
 package transpile
 
 import (
+	"strconv"
+
 	ast "github.com/breml/logstash-config/ast"
 	"github.com/rs/zerolog/log"
 )
@@ -46,6 +48,55 @@ func getBoolValue(attr ast.Attribute) bool {
 	}
 	log.Panic().Msg("Unexpected")
 	return false
+}
+
+func getHashAttributeKeyValueUntyped(attr ast.Attribute) ([]string, []interface{}) {
+	var keys []string
+	var values []interface{}
+	switch t := attr.(type) {
+	case ast.HashAttribute:
+		for _, entry := range t.Entries {
+			switch tKey := entry.Key.(type) {
+			case ast.StringAttribute:
+				keys = append(keys, toElasticPipelineSelector(tKey.Value()))
+			default:
+				log.Panic().Msg("Unexpected key of type not string")
+			}
+
+			switch tValue := entry.Value.(type) {
+			case ast.StringAttribute:
+
+				if tValue.Value() == "true" || tValue.Value() == "false" {
+					bv, _ := strconv.ParseBool(tValue.Value())
+
+					values = append(values, bv)
+				} else {
+					values = append(values, toElasticPipelineSelector(tValue.Value()))
+				}
+
+			case ast.NumberAttribute:
+
+				values = append(values, tValue.Value())
+
+			default:
+				log.Panic().Msg("Unexpected value type of type not string")
+			}
+		}
+	// // For the Rename use-case
+	// case ast.ArrayAttribute:
+	// 	arrays := getArrayStringAttributes(attr)
+	// 	if len(arrays)%2 != 0 {
+	// 		log.Panic().Msg("Hash expected but an uneven list is provided")
+	// 	}
+	// 	for i := 0; i < len(arrays); i += 2 {
+	// 		keys = append(keys, arrays[i])
+	// 		values = append(values, arrays[i+1])
+	// 	}
+
+	default: // Unexpected Case --> PANIC
+		log.Panic().Msgf("Unexpected Case %s", attr.String())
+	}
+	return keys, values
 }
 
 func getHashAttributeKeyValue(attr ast.Attribute) ([]string, []string) {
@@ -107,6 +158,8 @@ func getArrayStringAttributes(attr ast.Attribute) []string {
 		for _, el := range tattr.Attributes {
 			values = append(values, getStringAttributeString(el))
 		}
+	case ast.StringAttribute:
+		values = append(values, getStringAttributeString(tattr))
 
 	default:
 		log.Panic().Msg("I will only an array of strings")
