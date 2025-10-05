@@ -62,6 +62,9 @@ baffo transpile file.conf \
   --fidelity=false
 ```
 
+> ⚠️ Disclaimer: Semantic equivalence between the input Logstash pipelines and the generated Elasticsearch ingest pipelines is not formally guaranteed. The output should not be used in production without careful review and testing.
+
+
 #### Check 
 
 The `check` command verifies the syntax of Logstash configuration files:
