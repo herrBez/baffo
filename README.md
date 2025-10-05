@@ -68,7 +68,11 @@ baffo transpile file.conf \
 If you need a quick conversion without bothering creating a file you can:
 
 ```
-baffo transpile /dev/stdin --deal_with_error_locally=false --pipeline_threshold 10 --add_default_global_on_failure=true --fidelity=false <<< 'filter{ mutate { add_field => {"[test]" => "foo"}}}'
+baffo transpile /dev/stdin --deal_with_error_locally=false \
+  --pipeline_threshold 10 \
+  --add_default_global_on_failure=true \
+  --fidelity=false \
+  <<< 'filter{ mutate { add_field => {"[test]" => "foo"}}}'
 ```
 
 #### Check 
