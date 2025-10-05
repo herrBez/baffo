@@ -75,6 +75,11 @@ baffo transpile /dev/stdin --deal_with_error_locally=false \
   <<< 'filter{ mutate { add_field => {"[test]" => "foo"}}}'
 ```
 
+The program outputs a JSON Dictionary with one entry per generated pipeline.
+The main-pipeline is called `main-pipeline-<filename>`.
+
+You can use tools like `yq` and `jq` to manipulate them.
+
 #### Check 
 
 The `check` command verifies the syntax of Logstash configuration files:
