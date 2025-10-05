@@ -18,11 +18,11 @@ const (
 func Execute(version string, stdout, stderr io.Writer) int {
 	configDir, err := os.UserConfigDir()
 	if err == nil {
-		configDir = path.Join(configDir, "mustache")
+		configDir = path.Join(configDir, "baffo")
 	}
 
 	// Initialize config
-	viper.SetConfigName("mustache")
+	viper.SetConfigName("baffo")
 	viper.AddConfigPath(".")
 	if configDir != "" {
 		viper.AddConfigPath(configDir)
@@ -53,7 +53,7 @@ func Execute(version string, stdout, stderr io.Writer) int {
 
 func makeRootCmd(version string) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use: "mustache",
+		Use: "baffo",
 		Run: func(cmd *cobra.Command, args []string) {
 			_ = cmd.Help()
 		},
