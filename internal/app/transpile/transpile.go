@@ -1273,28 +1273,27 @@ int severity = pri & 0x7;
 int facility = pri / 8;
 `, *field)
 
-	if ECSCompatibility == "disabled" {
+	switch ECSCompatibility {
+	case "disabled":
 		setValuesString = `ctx.syslog_severity_code = severity;
 ctx.syslog_facility_code = facility;`
-	} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
+	case "v1", "v8":
 		setValuesString = `/* Make sure log.syslog.facility, log.syslog.priority are defined Maps */
-ctx.putIfAbsent('log', [:]);
-ctx.log.putIfAbsent('syslog', [:]);
-ctx.log.syslog.putIfAbsent('facility', [:]);
-ctx.log.syslog.putIfAbsent('severity', [:]);
-ctx.log.syslog.severity.name = params.severity[severity];
-ctx.log.syslog.severity.code = severity;
+field('log.syslog.severity.name', params.severity[severity]);
+field('log.syslog.severity.code', severity);
 `
 	}
 
 	useLabelsScript := ""
-	if ECSCompatibility == "disabled" {
+	switch ECSCompatibility {
+	case "disabled":
 		useLabelsScript = `ctx.syslog_facility_name = params.facility[facility];
 ctx.syslog_severity_name = params.severity[severity];
 		`
-	} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
-		useLabelsScript = `ctx.log.syslog.facility.name = params.facility[facility];
-ctx.log.syslog.facility.name = facility;`
+	case "v1", "v8":
+		useLabelsScript = `field('log.syslog.facility.name', params.facility[facility]);
+field('log.syslog.facility.code', facility);
+`
 	}
 
 	proc := ScriptProcessor{}.WithTag(id).(ScriptProcessor)
