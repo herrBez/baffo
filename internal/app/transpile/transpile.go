@@ -1778,29 +1778,12 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 		b.WriteString(`if (tmp == null) { tmp = params.fallback; }`)
 	}
 
-	fieldToAssign := toElasticPipelineSelectorWithNullable(*target, false)
-	// fieldToAssign := toElasticPipelineSelectorCondition(*target)
-
-	// TODO: Add the creation of the substructure
-	// createSubStructure := ""
-	// subFields := returnSubFields(*target)
-	// currentPath := ""
-	// currentLogstashPath := ""
-	// for i, f := range subFields {
-	// 	if i == 0 {
-	// 		currentLogstashPath += "[" + f + "]"
-	// 	} else if i > 0 && i < len(subFields)-1 {
-	// 		createSubStructure += fmt.Sprintf("; ctx.%s.putIfAbsent('%s', [:])", createSubStructure, toElasticPipelineSelectorWithNullable(currentLogstashPath, false), f)
-	// 	}
-	// }
-
-	b.WriteString(fmt.Sprintf(`if (tmp != null) { %s = tmp; }`, fieldToAssign))
+	b.WriteString(fmt.Sprintf(`if (tmp != null) { field('%s').set(tmp); }`, field))
 
 	proc.Source = pointer(b.String())
 
 	proc.Description = pointer(fmt.Sprintf("Translate the field '%s' to field '%s'.", toElasticPipelineSelector(*source), toElasticPipelineSelector(*target)))
 
-	log.Warn().Msgf("The Translate script %s produced, assumes: 1. that the target structure is already created.  Consider improving the script to create the structure if not present", id)
 	ingestProcessors = append(ingestProcessors, proc)
 
 	return ingestProcessors, onFailureProcessors
