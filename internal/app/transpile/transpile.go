@@ -1870,7 +1870,7 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 	applyFunc := func(section string) ApplyPluginsFuncCondition {
 		var i int = 0
 		return func(c *Cursor, constraint Constraints, ip *IngestPipeline) {
-			log.Debug().Msgf(section)
+			log.Debug().Msg(section)
 
 			ip.Processors = append(ip.Processors, t.DealWithPlugin(section, *c.Plugin(), constraint)...)
 
