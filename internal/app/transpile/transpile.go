@@ -1259,9 +1259,10 @@ func DealWithSyslogPri(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	}
 
 	if field == nil {
-		if ECSCompatibility == "disabled" {
+		switch ECSCompatibility {
+		case "disabled":
 			field = pointer("syslog_pri")
-		} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
+		case "v1", "v8":
 			field = pointer("log.syslog.priority")
 		}
 	}
