@@ -1279,8 +1279,8 @@ int facility = pri / 8;
 ctx.syslog_facility_code = facility;`
 	case "v1", "v8":
 		setValuesString = `/* Make sure log.syslog.facility, log.syslog.priority are defined Maps */
-field('log.syslog.severity.name', params.severity[severity]);
-field('log.syslog.severity.code', severity);
+field('log.syslog.severity.name').set(params.severity[severity]);
+field('log.syslog.severity.code').set(severity);
 `
 	}
 
@@ -1291,8 +1291,8 @@ field('log.syslog.severity.code', severity);
 ctx.syslog_severity_name = params.severity[severity];
 		`
 	case "v1", "v8":
-		useLabelsScript = `field('log.syslog.facility.name', params.facility[facility]);
-field('log.syslog.facility.code', facility);
+		useLabelsScript = `field('log.syslog.facility.name').set(params.facility[facility]);
+field('log.syslog.facility.code').set(facility);
 `
 	}
 
