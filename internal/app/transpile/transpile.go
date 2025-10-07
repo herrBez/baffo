@@ -351,15 +351,16 @@ func DealWithMutateAttributes(attr ast.Attribute, ingestProcessors []IngestProce
 			ingestProcessors = append(ingestProcessors, ScriptProcessor{
 				Source: pointer(
 					fmt.Sprintf(
-						`if(ctx.%s instanceof String) {
-	ctx.%s = ctx.%s.substring(0, 1).toUpperCase() + ctx.%s.substring(1);
-} else if(ctx.%s instanceof List) {
-	ctx.%s = ctx.%s.stream().map(x -> x.substring(0, 1).toUpperCase() + x.substring(1)).collect(Collectors.toList());
+						`def fieldValue = $('%s', null);
+if(fieldValue instanceof String) {
+	$('%s').set(fieldValue.substring(0, 1).toUpperCase() + fieldValue.substring(1));
+} else if(fieldValue instanceof List) {
+	$('%s').set(fieldValue.stream().map(x -> x.substring(0, 1).toUpperCase() + x.substring(1)).collect(Collectors.toList());
 }
 /* Commented out, uncomment if you need to fail on erroneous type
 else {
   throw new Exception("Cannot capitalize something that is not a string")
-}*/`, field, field, field, field, field, field, field)),
+}*/`, field, field, field)),
 			}.WithIf(pointer(getIfFieldDefined(field)), false).
 				WithDescription(fmt.Sprintf("Capitalize field '%s'", field)))
 		}
@@ -566,9 +567,10 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 	for _, m := range field_finder.FindAll([]byte(s), -1) {
 		matchFound = true
 		log.Info().Msg(toElasticPipelineSelector(string(m[2 : len(m)-1])))
-		if context == ProcessorContext {
+		switch context {
+		case ProcessorContext:
 			newS = strings.Replace(newS, string(m), "{{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}}", 1)
-		} else if context == ScriptContext {
+		case ScriptContext:
 			var fieldValue = toElasticPipelineSelectorCondition(toElasticPipelineSelector(string(m[2 : len(m)-1])))
 
 			pos := field_finder.FindStringIndex(newS)
@@ -584,7 +586,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 				fieldValue = fieldValue + " + '"
 			}
 			newS = strings.Replace(newS, string(m), fieldValue, 1)
-		} else if context == DissectContext {
+		case DissectContext:
 			// Deal With the Optional Prefix Modifer (i.e., +, ?, *)
 			dissectPrefixModifierFinder := regexp.MustCompile(`\%\{(\+|\?|\*)?(.*)\}`)
 
@@ -606,7 +608,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 
 			newS = strings.Replace(newS, string(m), "%{"+prefix+toElasticPipelineSelector(string(field)[0:len(field)])+suffix+"}", 1)
 
-		} else if context == GrokContext {
+		case GrokContext:
 			// We can assume there are no other closing parenthesis
 			// TODO: Check whether the subpatterns should be ([^:\}]+)
 			grokPartsFinder := regexp.MustCompile(`\%\{([^:]+)(:[^:]+)?(:[^:]+)?\}`)
@@ -768,7 +770,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 					ScriptProcessor{
 						Source: pointer(
 							fmt.Sprintf(
-								`if(ctx?.tags != null && ctx.tags instanceof List) {
+								`if(ctx.tags instanceof List) {
 	ctx.tags.removeIf(x -> x == '%s')
 }`, toElasticPipelineSelector(t),
 							))},
@@ -778,7 +780,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 		case "enable_metric", "periodic_flush": // N/A
 
 		default:
-			log.Warn().Msgf("Remove Tag (%s) is not yet supported", attr.Name())
+			log.Warn().Msgf("On Success Attribute: %s is not yet supported", attr.Name())
 
 		}
 	}
@@ -1273,28 +1275,27 @@ int severity = pri & 0x7;
 int facility = pri / 8;
 `, *field)
 
-	if ECSCompatibility == "disabled" {
+	switch ECSCompatibility {
+	case "disabled":
 		setValuesString = `ctx.syslog_severity_code = severity;
 ctx.syslog_facility_code = facility;`
-	} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
+	case "v1", "v8":
 		setValuesString = `/* Make sure log.syslog.facility, log.syslog.priority are defined Maps */
-ctx.putIfAbsent('log', [:]);
-ctx.log.putIfAbsent('syslog', [:]);
-ctx.log.syslog.putIfAbsent('facility', [:]);
-ctx.log.syslog.putIfAbsent('severity', [:]);
-ctx.log.syslog.severity.name = params.severity[severity];
-ctx.log.syslog.severity.code = severity;
+field('log.syslog.severity.name').set(params.severity[severity]);
+field('log.syslog.severity.code').set(severity);
 `
 	}
 
 	useLabelsScript := ""
-	if ECSCompatibility == "disabled" {
+	switch ECSCompatibility {
+	case "disabled":
 		useLabelsScript = `ctx.syslog_facility_name = params.facility[facility];
 ctx.syslog_severity_name = params.severity[severity];
 		`
-	} else if ECSCompatibility == "v1" || ECSCompatibility == "v8" {
-		useLabelsScript = `ctx.log.syslog.facility.name = params.facility[facility];
-ctx.log.syslog.facility.name = facility;`
+	case "v1", "v8":
+		useLabelsScript = `field('log.syslog.facility.name').set(params.facility[facility]);
+field('log.syslog.facility.code').set(facility);
+`
 	}
 
 	proc := ScriptProcessor{}.WithTag(id).(ScriptProcessor)
@@ -1779,29 +1780,12 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 		b.WriteString(`if (tmp == null) { tmp = params.fallback; }`)
 	}
 
-	fieldToAssign := toElasticPipelineSelectorWithNullable(*target, false)
-	// fieldToAssign := toElasticPipelineSelectorCondition(*target)
-
-	// TODO: Add the creation of the substructure
-	// createSubStructure := ""
-	// subFields := returnSubFields(*target)
-	// currentPath := ""
-	// currentLogstashPath := ""
-	// for i, f := range subFields {
-	// 	if i == 0 {
-	// 		currentLogstashPath += "[" + f + "]"
-	// 	} else if i > 0 && i < len(subFields)-1 {
-	// 		createSubStructure += fmt.Sprintf("; ctx.%s.putIfAbsent('%s', [:])", createSubStructure, toElasticPipelineSelectorWithNullable(currentLogstashPath, false), f)
-	// 	}
-	// }
-
-	b.WriteString(fmt.Sprintf(`if (tmp != null) { %s = tmp; }`, fieldToAssign))
+	b.WriteString(fmt.Sprintf(`if (tmp != null) { field('%s').set(tmp); }`, field))
 
 	proc.Source = pointer(b.String())
 
 	proc.Description = pointer(fmt.Sprintf("Translate the field '%s' to field '%s'.", toElasticPipelineSelector(*source), toElasticPipelineSelector(*target)))
 
-	log.Warn().Msgf("The Translate script %s produced, assumes: 1. that the target structure is already created.  Consider improving the script to create the structure if not present", id)
 	ingestProcessors = append(ingestProcessors, proc)
 
 	return ingestProcessors, onFailureProcessors
@@ -1886,7 +1870,7 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 	applyFunc := func(section string) ApplyPluginsFuncCondition {
 		var i int = 0
 		return func(c *Cursor, constraint Constraints, ip *IngestPipeline) {
-			log.Debug().Msgf(section)
+			log.Debug().Msg(section)
 
 			ip.Processors = append(ip.Processors, t.DealWithPlugin(section, *c.Plugin(), constraint)...)
 
