@@ -1194,7 +1194,7 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	b.WriteString(
 		fmt.Sprintf(`
 for (n in params.networks) {
-	c = new CIDR(n)
+	def c = new CIDR(n);
 	for (a in %s) {
 		if (c.contains(a)) {
 			return;

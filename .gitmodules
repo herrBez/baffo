@@ -1,0 +1,3 @@
+[submodule "baffo-testsuite"]
+	path = baffo-testsuite
+	url = https://github.com/herrBez/baffo-testsuite
