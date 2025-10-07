@@ -352,9 +352,6 @@ func DealWithMutateAttributes(attr ast.Attribute, ingestProcessors []IngestProce
 				Source: pointer(
 					fmt.Sprintf(
 						`def fieldValue = $('%s', null);
-if(fieldValue == null) {
-	return;
-}
 if(fieldValue instanceof String) {
 	$('%s').set(fieldValue.substring(0, 1).toUpperCase() + fieldValue.substring(1));
 } else if(fieldValue instanceof List) {
@@ -570,9 +567,10 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 	for _, m := range field_finder.FindAll([]byte(s), -1) {
 		matchFound = true
 		log.Info().Msg(toElasticPipelineSelector(string(m[2 : len(m)-1])))
-		if context == ProcessorContext {
+		switch context {
+		case ProcessorContext:
 			newS = strings.Replace(newS, string(m), "{{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}}", 1)
-		} else if context == ScriptContext {
+		case ScriptContext:
 			var fieldValue = toElasticPipelineSelectorCondition(toElasticPipelineSelector(string(m[2 : len(m)-1])))
 
 			pos := field_finder.FindStringIndex(newS)
@@ -588,7 +586,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 				fieldValue = fieldValue + " + '"
 			}
 			newS = strings.Replace(newS, string(m), fieldValue, 1)
-		} else if context == DissectContext {
+		case DissectContext:
 			// Deal With the Optional Prefix Modifer (i.e., +, ?, *)
 			dissectPrefixModifierFinder := regexp.MustCompile(`\%\{(\+|\?|\*)?(.*)\}`)
 
@@ -610,7 +608,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 
 			newS = strings.Replace(newS, string(m), "%{"+prefix+toElasticPipelineSelector(string(field)[0:len(field)])+suffix+"}", 1)
 
-		} else if context == GrokContext {
+		case GrokContext:
 			// We can assume there are no other closing parenthesis
 			// TODO: Check whether the subpatterns should be ([^:\}]+)
 			grokPartsFinder := regexp.MustCompile(`\%\{([^:]+)(:[^:]+)?(:[^:]+)?\}`)
