@@ -351,15 +351,19 @@ func DealWithMutateAttributes(attr ast.Attribute, ingestProcessors []IngestProce
 			ingestProcessors = append(ingestProcessors, ScriptProcessor{
 				Source: pointer(
 					fmt.Sprintf(
-						`if(ctx.%s instanceof String) {
-	ctx.%s = ctx.%s.substring(0, 1).toUpperCase() + ctx.%s.substring(1);
-} else if(ctx.%s instanceof List) {
-	ctx.%s = ctx.%s.stream().map(x -> x.substring(0, 1).toUpperCase() + x.substring(1)).collect(Collectors.toList());
+						`def fieldValue = $('%s', null);
+if(fieldValue == null) {
+	return;
+}
+if(fieldValue instanceof String) {
+	$('%s').set(fieldValue.substring(0, 1).toUpperCase() + fieldValue.substring(1));
+} else if(fieldValue instanceof List) {
+	$('%s').set(fieldValue.stream().map(x -> x.substring(0, 1).toUpperCase() + x.substring(1)).collect(Collectors.toList());
 }
 /* Commented out, uncomment if you need to fail on erroneous type
 else {
   throw new Exception("Cannot capitalize something that is not a string")
-}*/`, field, field, field, field, field, field, field)),
+}*/`, field, field, field)),
 			}.WithIf(pointer(getIfFieldDefined(field)), false).
 				WithDescription(fmt.Sprintf("Capitalize field '%s'", field)))
 		}
@@ -768,7 +772,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 					ScriptProcessor{
 						Source: pointer(
 							fmt.Sprintf(
-								`if(ctx?.tags != null && ctx.tags instanceof List) {
+								`if(ctx.tags instanceof List) {
 	ctx.tags.removeIf(x -> x == '%s')
 }`, toElasticPipelineSelector(t),
 							))},
@@ -778,7 +782,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 		case "enable_metric", "periodic_flush": // N/A
 
 		default:
-			log.Warn().Msgf("Remove Tag (%s) is not yet supported", attr.Name())
+			log.Warn().Msgf("On Success Attribute: %s is not yet supported", attr.Name())
 
 		}
 	}
