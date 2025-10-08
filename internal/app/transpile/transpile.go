@@ -353,9 +353,9 @@ func DealWithMutateAttributes(attr ast.Attribute, ingestProcessors []IngestProce
 					fmt.Sprintf(
 						`def fieldValue = $('%s', null);
 if(fieldValue instanceof String) {
-	$('%s').set(fieldValue.substring(0, 1).toUpperCase() + fieldValue.substring(1));
+	field('%s').set(fieldValue.substring(0, 1).toUpperCase() + fieldValue.substring(1));
 } else if(fieldValue instanceof List) {
-	$('%s').set(fieldValue.stream().map(x -> x.substring(0, 1).toUpperCase() + x.substring(1)).collect(Collectors.toList());
+	field('%s').set(fieldValue.stream().map(x -> x.substring(0, 1).toUpperCase() + x.substring(1)).collect(Collectors.toList()));
 }
 /* Commented out, uncomment if you need to fail on erroneous type
 else {
