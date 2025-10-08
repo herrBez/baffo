@@ -1357,7 +1357,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 
 	constraintTranspiled := transpileConstraint(constraint)
 
-	onSuccessCondition := pointer(fmt.Sprintf("!%s", getIfFieldDefined(getUniqueOnFailureAddField(id))))
+	onSuccessCondition := pointer(fmt.Sprintf("!(%s)", getIfFieldDefined(getUniqueOnFailureAddField(id))))
 	onSuccessProcessors := DealWithCommonAttributes(plugin)
 	for i := range onSuccessProcessors {
 		// log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
