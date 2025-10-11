@@ -975,9 +975,12 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 
 	// Add a TargetField is not already present based on ECS_Compatibility
 	if uap.TargetField == nil {
-		if ecs_compatibility == "disabled" {
+		switch ecs_compatibility {
+		case "disabled":
+			// An empty field is not supported by Elasticsearch
+			// TODO --> Add an on-success processor to copy the original field in the root of the document
 			uap.TargetField = pointer("")
-		} else if ecs_compatibility == "v8" || ecs_compatibility == "v1" {
+		case "v8", "v1":
 			log.Debug().Msg("Nothing to do since the UserAgent Processor already uses user_agent as target field")
 		}
 	}
@@ -1088,7 +1091,12 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 			}
 
 		case "ecs_compatibility":
-			gp.ECSCompatibility = getStringAttributeString(attr)
+			compatibility := getStringAttributeString(attr)
+			if compatibility == "v8" {
+				compatibility = "v1" // grok processor only supports v1
+			}
+
+			gp.ECSCompatibility = compatibility
 		case "pattern_definitions":
 			gp.PatternDefinitions = hashAttributeToMap(attr)
 		case "tag_on_failure":
@@ -1760,9 +1768,10 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	// Post-Condition: Given that source is mandatory, source variable will always be a string
 
 	if target == nil {
-		if ECSCompatibility == "disabled" {
+		switch ECSCompatibility {
+		case "disabled":
 			target = pointer("translation")
-		} else {
+		case "v1", "v8":
 			target = source
 		}
 	}
