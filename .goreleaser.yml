@@ -5,9 +5,9 @@ before:
     - go mod tidy
 
 builds:
-  - id: mustache
-    main: ./cmd/mustache
-    binary: mustache
+  - id: baffo
+    main: ./cmd/baffo
+    binary: baffo
     env:
       - CGO_ENABLED=0
     goos:
