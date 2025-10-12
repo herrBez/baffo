@@ -660,11 +660,6 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 		newS = newS + "'"
 	}
 
-	if !matchFound {
-		// No match found, so we can return the string as-is
-		return "'" + s + "'", false
-	}
-
 	return newS, matchFound
 }
 
