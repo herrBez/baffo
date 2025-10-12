@@ -553,6 +553,7 @@ const (
 	ProcessorContext
 	DissectContext
 	GrokContext
+	CidrContext
 )
 
 // Function that given an expression like "foo_%{[selector]}" returns the equivalent Elastic expression
@@ -570,8 +571,27 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 		switch context {
 		case ProcessorContext:
 			newS = strings.Replace(newS, string(m), "{{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}}", 1)
+
 		case ScriptContext:
 			var fieldValue = toElasticPipelineSelectorCondition(toElasticPipelineSelector(string(m[2 : len(m)-1])))
+
+			pos := field_finder.FindStringIndex(newS)
+			if firstRun && pos[0] != 0 {
+				firstRun = false
+				startWithSelector = false
+			}
+
+			if pos[0] > 0 {
+				fieldValue = "' + " + fieldValue
+			}
+			if pos[1] < len(newS)-1 {
+				fieldValue = fieldValue + " + '"
+			}
+			newS = strings.Replace(newS, string(m), fieldValue, 1)
+
+		case CidrContext:
+			// Special version of the ScriptContext where we use a default of empty string
+			var fieldValue = "$('" + toElasticPipelineSelector(string(m[2:len(m)-1])) + "', '')"
 
 			pos := field_finder.FindStringIndex(newS)
 			if firstRun && pos[0] != 0 {
@@ -632,7 +652,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 		}
 	}
 
-	if context == ScriptContext && !startWithSelector {
+	if (context == ScriptContext || context == CidrContext) && !startWithSelector {
 		newS = "'" + newS
 	}
 
@@ -1181,7 +1201,7 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	elastic_addresses := []string{}
 	constant := true
 	for _, a := range addresses {
-		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, ScriptContext)
+		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, CidrContext)
 		if matchFound {
 			constant = false
 		}
