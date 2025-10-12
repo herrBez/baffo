@@ -1937,7 +1937,7 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 
 	if t.addCleanUpProcessor {
 		ip.Processors = append(ip.Processors, RemoveProcessor{
-			Field:         pointer([]string{"_TRANSPILER", "@metadata"}),
+			Field:         pointer([]string{TRANSPILER_PREFIX, "@metadata"}),
 			IgnoreMissing: true,
 		}.WithTag("cleanup-metadata").WithDescription("Cleanup temporary fields created by the transpiler"))
 	}
