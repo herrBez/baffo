@@ -1,11 +1,13 @@
-# This is an example .goreleaser.yml file with some sane defaults.
-# Make sure to check the documentation at http://goreleaser.com
+version: 2
+
 before:
   hooks:
     # You may remove this if you don't use go modules.
     - go mod tidy
+
 builds:
-  - main: ./cmd/mustache
+  - id: mustache
+    main: ./cmd/mustache
     binary: mustache
     env:
       - CGO_ENABLED=0
@@ -13,18 +15,25 @@ builds:
       - linux
       - windows
       - darwin
+
 archives:
   - name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    builds:
+      - mustache
     replacements:
       darwin: Darwin
       linux: Linux
       windows: Windows
       386: i386
       amd64: x86_64
+
 snapshot:
   name_template: "{{ .Tag }}-next"
+
 changelog:
-  skip: true
+  disable: true   # 'skip' is replaced by 'disable' in v2
+
 release:
   github:
     owner: breml
