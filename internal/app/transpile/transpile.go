@@ -656,6 +656,15 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 		newS = "'" + newS
 	}
 
+	if (context == CidrContext) && newS[len(newS)-1] != ')' {
+		newS = newS + "'"
+	}
+
+	if !matchFound {
+		// No match found, so we can return the string as-is
+		return "'" + s + "'", false
+	}
+
 	return newS, matchFound
 }
 
@@ -1213,26 +1222,34 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	params := make(map[string]interface{})
 	params["networks"] = networks
 
-	addressOutput := fmt.Sprintf("%s", elastic_addresses)
+	addressOutput := ""
 	if constant {
 		params["addresses"] = addresses
 		addressOutput = "params.addresses"
+	} else {
+		addressOutput = fmt.Sprintf("[%s]", strings.Join(elastic_addresses, ", "))
 	}
 
 	var b bytes.Buffer
 
 	b.WriteString(
-		fmt.Sprintf(`
-for (n in params.networks) {
-	def c = new CIDR(n);
-	for (a in %s) {
-		if (c.contains(a)) {
-			return;
+		fmt.Sprintf(`for (n in params.networks) {
+    def c = new CIDR(n);
+    for (a in %s) {
+		try {
+			if (c.contains(a)) {
+					return;
+			}
+		} catch (IllegalArgumentException e) {
+			// We deliberately ignore wrongly formatted ip addresses caused by string interpolation
 		}
-	}
+    }
 }
-throw new Exception("Could not find CIDR value");
-`, addressOutput))
+throw new Exception('Could not find CIDR value');`, addressOutput))
+
+	if !constant {
+		log.Warn().Msgf("[Plugin %s] Non-constant cidr addresses detected. Be aware that we ignore malformed ip-addresses", plugin.Name())
+	}
 
 	ingestProcessors = append(ingestProcessors, ScriptProcessor{
 		Source: pointer(b.String()),
