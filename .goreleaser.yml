@@ -29,5 +29,5 @@ changelog:
 
 release:
   github:
-    owner: breml
-    name: logstash-config
+    owner: herrBez
+    name: baffo
