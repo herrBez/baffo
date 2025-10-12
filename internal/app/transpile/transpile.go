@@ -553,7 +553,6 @@ const (
 	ProcessorContext
 	DissectContext
 	GrokContext
-	CidrContext
 )
 
 // Function that given an expression like "foo_%{[selector]}" returns the equivalent Elastic expression
@@ -571,27 +570,8 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 		switch context {
 		case ProcessorContext:
 			newS = strings.Replace(newS, string(m), "{{{"+toElasticPipelineSelector(string(m[2:len(m)-1]))+"}}}", 1)
-
 		case ScriptContext:
 			var fieldValue = toElasticPipelineSelectorCondition(toElasticPipelineSelector(string(m[2 : len(m)-1])))
-
-			pos := field_finder.FindStringIndex(newS)
-			if firstRun && pos[0] != 0 {
-				firstRun = false
-				startWithSelector = false
-			}
-
-			if pos[0] > 0 {
-				fieldValue = "' + " + fieldValue
-			}
-			if pos[1] < len(newS)-1 {
-				fieldValue = fieldValue + " + '"
-			}
-			newS = strings.Replace(newS, string(m), fieldValue, 1)
-
-		case CidrContext:
-			// Special version of the ScriptContext where we use a default of empty string
-			var fieldValue = "$('" + toElasticPipelineSelector(string(m[2:len(m)-1])) + "', '')"
 
 			pos := field_finder.FindStringIndex(newS)
 			if firstRun && pos[0] != 0 {
@@ -652,17 +632,8 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 		}
 	}
 
-	if (context == ScriptContext || context == CidrContext) && !startWithSelector {
+	if context == ScriptContext && !startWithSelector {
 		newS = "'" + newS
-	}
-
-	if (context == CidrContext) && newS[len(newS)-1] != ')' {
-		newS = newS + "'"
-	}
-
-	if !matchFound {
-		// No match found, so we can return the string as-is
-		return "'" + s + "'", false
 	}
 
 	return newS, matchFound
@@ -1210,7 +1181,7 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	elastic_addresses := []string{}
 	constant := true
 	for _, a := range addresses {
-		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, CidrContext)
+		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, ScriptContext)
 		if matchFound {
 			constant = false
 		}
@@ -1222,34 +1193,26 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	params := make(map[string]interface{})
 	params["networks"] = networks
 
-	addressOutput := ""
+	addressOutput := fmt.Sprintf("%s", elastic_addresses)
 	if constant {
 		params["addresses"] = addresses
 		addressOutput = "params.addresses"
-	} else {
-		addressOutput = fmt.Sprintf("[%s]", strings.Join(elastic_addresses, ", "))
 	}
 
 	var b bytes.Buffer
 
 	b.WriteString(
-		fmt.Sprintf(`for (n in params.networks) {
-    def c = new CIDR(n);
-    for (a in %s) {
-		try {
-			if (c.contains(a)) {
-					return;
-			}
-		} catch (IllegalArgumentException e) {
-			// We deliberately ignore wrongly formatted ip addresses caused by string interpolation
+		fmt.Sprintf(`
+for (n in params.networks) {
+	def c = new CIDR(n);
+	for (a in %s) {
+		if (c.contains(a)) {
+			return;
 		}
-    }
-}
-throw new Exception('Could not find CIDR value');`, addressOutput))
-
-	if !constant {
-		log.Warn().Msgf("[Plugin %s] Non-constant cidr addresses detected. Be aware that we ignore malformed ip-addresses", plugin.Name())
 	}
+}
+throw new Exception("Could not find CIDR value");
+`, addressOutput))
 
 	ingestProcessors = append(ingestProcessors, ScriptProcessor{
 		Source: pointer(b.String()),
