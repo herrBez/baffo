@@ -81,6 +81,10 @@ The main-pipeline is called `main-pipeline-<filename>`.
 
 You can use tools like `yq` and `jq` to manipulate them.
 
+
+**Testsuite**
+To verify that the Elasticsearch ingest pipelines generated from Logstash pipelines behave as expected, we use the [Baffo Testsuite](https://github.com/herrBez/baffo-testsuite). This testsuite provides a collection of sample (Logstash) pipelines and automated checks to assess semantic equivalence between the original Logstash configuration and the transpiled Elasticsearch pipelines.
+
 #### Check 
 
 The `check` command verifies the syntax of Logstash configuration files:
