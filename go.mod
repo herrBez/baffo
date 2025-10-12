@@ -1,6 +1,6 @@
 module github.com/herrBez/baffo
 
-go 1.24.7
+go 1.24
 
 require (
 	github.com/hashicorp/go-multierror v1.1.1
