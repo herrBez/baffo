@@ -19,6 +19,7 @@ func makeTranspileCmd() *cobra.Command {
 	cmd.Flags().Bool("deal_with_error_locally", true, "whether we deal with errors locally, e.g., add tag on error by default")
 	cmd.Flags().Bool("add_default_global_on_failure", false, "whether to add a default global on failure")
 	cmd.Flags().Bool("fidelity", true, "try to keep correct if-else semantic")
+	cmd.Flags().Bool("add_cleanup_processor", true, "add a cleanup processor to remove temporary fields created by the transpiler")
 
 	return cmd
 }
@@ -29,6 +30,7 @@ func runTranspile(cmd *cobra.Command, args []string) error {
 	deal_with_error_locally, _ := cmd.Flags().GetBool("deal_with_error_locally")
 	add_default_global_on_failure, _ := cmd.Flags().GetBool("add_default_global_on_failure")
 	fidelity, _ := cmd.Flags().GetBool("fidelity")
-	check := transpile.New(threshold, log_level, deal_with_error_locally, add_default_global_on_failure, fidelity)
+	add_cleanup_processor, _ := cmd.Flags().GetBool("add_cleanup_processor")
+	check := transpile.New(threshold, log_level, deal_with_error_locally, add_default_global_on_failure, fidelity, add_cleanup_processor)
 	return check.Run(args)
 }

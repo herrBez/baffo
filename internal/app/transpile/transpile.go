@@ -35,15 +35,17 @@ type Transpile struct {
 	deal_with_error_locally   bool
 	addDefaultGlobalOnFailure bool
 	fidelity                  bool
+	addCleanUpProcessor       bool
 }
 
-func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool) Transpile {
+func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool) Transpile {
 	return Transpile{
 		threshold:                 threshold,
 		log_level:                 level[strings.ToLower(log_level)],
 		deal_with_error_locally:   deal_with_error_locally,
 		addDefaultGlobalOnFailure: addDefaultGlobalOnFailure,
 		fidelity:                  fidelity,
+		addCleanUpProcessor:       addCleanupProcessor,
 	}
 }
 
@@ -1932,6 +1934,13 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 	// for _, f := range c.Output {
 	// 	t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"), &ip)
 	// }
+
+	if t.addCleanUpProcessor {
+		ip.Processors = append(ip.Processors, RemoveProcessor{
+			Field:         pointer([]string{"_TRANSPILER", "@metadata"}),
+			IgnoreMissing: true,
+		}.WithTag("cleanup-metadata").WithDescription("Cleanup temporary fields created by the transpiler"))
+	}
 
 	ips := getAllIngestPipeline(ip)
 
