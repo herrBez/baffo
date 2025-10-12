@@ -2,7 +2,6 @@ version: 2
 
 before:
   hooks:
-    # You may remove this if you don't use go modules.
     - go mod tidy
 
 builds:
@@ -21,18 +20,12 @@ archives:
     format: tar.gz
     builds:
       - mustache
-    replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      386: i386
-      amd64: x86_64
 
 snapshot:
   name_template: "{{ .Tag }}-next"
 
 changelog:
-  disable: true   # 'skip' is replaced by 'disable' in v2
+  disable: true
 
 release:
   github:
