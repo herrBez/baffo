@@ -17,12 +17,12 @@ builds:
 
 archives:
   - name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
-    builds:
-      - mustache
+    formats: [tar.gz]
+    ids:
+      - baffo
 
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  version_template: "{{ .Tag }}-next"
 
 changelog:
   disable: true
