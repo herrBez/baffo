@@ -43,7 +43,7 @@ func TestConversionOfConditions(t *testing.T) {
 		},
 		{
 			name: "Field equals value",
-			want: `(ctx?.foo != null && ctx.foo == "foo")`,
+			want: `ctx?.foo == "foo"`,
 			// [foo] == "foo"
 			input: ast.Condition{
 				Expression: []ast.Expression{
@@ -182,7 +182,7 @@ func TestEndToEnd(t *testing.T) {
 		{
 			name:  "Field equals string",
 			input: `[test] == "45"`,
-			want:  `(ctx?.test != null && ctx.test == "45")`,
+			want:  `ctx?.test == "45"`,
 		},
 		{
 			name:  "Negation",
@@ -193,7 +193,7 @@ func TestEndToEnd(t *testing.T) {
 			name:  "Cond1 or cond2",
 			input: `[abc] == "def" or [ghi]`,
 			// Got: (ctx?.foo != null && ctx.foo == "foo") && ctx?.test != null && ctx.test
-			want: `(ctx?.abc != null && ctx.abc == "def") || ctx?.ghi != null`,
+			want: `ctx?.abc == "def" || ctx?.ghi != null`,
 		},
 		{
 			name:  "Field exist",
@@ -207,8 +207,23 @@ func TestEndToEnd(t *testing.T) {
 		},
 		{
 			name:  "Special Field exist",
-			input: `[@metadata][input] == 'test'`,
-			want:  `(ctx.getOrDefault('@metadata', null)?.input != null && ctx['@metadata'].input == "test")`,
+			input: `[@metadata][input] != 'test'`,
+			want:  `ctx.getOrDefault('@metadata', null)?.input != "test"`,
+		},
+		{
+			name:  "Easy in",
+			input: `[field] in ["a", "b", "c"]`,
+			want:  `["a", "b", "c"].contains(ctx?.field)`,
+		},
+		{
+			name:  "Easy not in",
+			input: `[field] not in ["a", "b", "c"]`,
+			want:  `!["a", "b", "c"].contains(ctx?.field)`,
+		},
+		{
+			name:  "foo > 3",
+			input: `[foo] > 3`,
+			want:  `ctx?.foo > 3`,
 		},
 	}
 
