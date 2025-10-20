@@ -90,7 +90,7 @@ func (t Transpile) Run(args []string) error {
 			// continue
 		} else {
 			var tree ast.Config = res.(ast.Config)
-			// log.Println(reflect.TypeOf(tree))
+			log.Debug().Msgf("Parse Tree: %#v", tree)
 
 			ips = append(ips, t.buildIngestPipeline(filename, tree)...)
 
@@ -136,7 +136,6 @@ var transpiler = map[string]map[string]TranspileProcessor{
 }
 
 func transpileBoolExpression(bo ast.BooleanOperator) string {
-	log.Debug().Msg("&&")
 	switch bo.Op {
 	case ast.NoOperator:
 		return ""
@@ -181,7 +180,7 @@ func toElasticPipelineSelectorWithNullable(sel string, nullable bool) string {
 		for _, part := range parts {
 			// e.g., field metadata
 			if strings.HasPrefix(part, "@") {
-				elasticSelector += ".getOrDefault('@metadata', null)"
+				elasticSelector += fmt.Sprintf(".getOrDefault('%s', null)", part)
 				currentPath += fmt.Sprintf("['%s']", part)
 			} else {
 				elasticSelector += "?." + part
@@ -214,7 +213,7 @@ func toElasticPipelineSelectorWithNullable(sel string, nullable bool) string {
 // When using Selectors in conditions we need to check whether they are null or not and
 // and afterward can use them
 func toElasticPipelineSelectorCondition(sel string) string {
-	return toElasticPipelineSelectorWithNullable(sel, true) + " != null && " + toElasticPipelineSelectorWithNullable(sel, false)
+	return toElasticPipelineSelectorWithNullable(sel, false)
 }
 
 // This function should be used when translating expressions like set processors value
@@ -233,7 +232,8 @@ func transpileRvalue(expr ast.Node) string {
 		return "\"" + texpr.Value() + "\""
 	case ast.Selector:
 		return toElasticPipelineSelectorWithNullable(texpr.String(), true)
-
+	case ast.NumberAttribute:
+		return texpr.ValueString()
 	case ast.ArrayAttribute:
 		output := "["
 		for i, attr := range texpr.Attributes {
@@ -283,13 +283,13 @@ func transpileCondition(c ast.Condition) string {
 			// Selector is a special case that we treat differently
 			switch x := texpr.LValue.(type) {
 			case ast.Selector:
-				val = toElasticPipelineSelectorWithNullable(x.String(), true) + " != null && " + toElasticPipelineSelectorWithNullable(x.String(), false)
+				val = toElasticPipelineSelectorWithNullable(x.String(), true)
 			}
 
 			if bOpComparator != "" {
-				output = output + bOpComparator + "(" + val + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue) + ")"
+				output = output + bOpComparator + "" + val + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue) + ""
 			} else {
-				output = output + "(" + val + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue) + ")"
+				output = output + "" + val + " " + texpr.CompareOperator.String() + " " + transpileRvalue(texpr.RValue) + ""
 			}
 
 		case ast.RegexpExpression:
@@ -323,9 +323,9 @@ func transpileCondition(c ast.Condition) string {
 			}
 
 			if bOpComparator != "" {
-				output = output + bOpComparator + "(" + val + ")"
+				output = output + bOpComparator + "" + val + ""
 			} else { // No Operator is provided
-				output = output + "(" + val + ")"
+				output = output + "" + val + ""
 			}
 
 		default:
@@ -578,6 +578,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 			var fieldValue = toElasticPipelineSelectorCondition(toElasticPipelineSelector(string(m[2 : len(m)-1])))
 
 			pos := field_finder.FindStringIndex(newS)
+
 			if firstRun && pos[0] != 0 {
 				firstRun = false
 				startWithSelector = false
@@ -592,13 +593,17 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 			newS = strings.Replace(newS, string(m), fieldValue, 1)
 
 		case CidrContext:
-			// Special version of the ScriptContext where we use a default of empty string
+			// Special version of the CIDRContext where we use a default of empty string
 			var fieldValue = "$('" + toElasticPipelineSelector(string(m[2:len(m)-1])) + "', '')"
 
 			pos := field_finder.FindStringIndex(newS)
+
 			if firstRun && pos[0] != 0 {
 				firstRun = false
 				startWithSelector = false
+			}
+			if firstRun {
+				firstRun = false
 			}
 
 			if pos[0] > 0 {
@@ -657,8 +662,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 	if (context == ScriptContext || context == CidrContext) && !startWithSelector {
 		newS = "'" + newS
 	}
-
-	if (context == CidrContext) && newS[len(newS)-1] != ')' {
+	if matchFound && context == CidrContext && newS[len(newS)-1] != ')' {
 		newS = newS + "'"
 	}
 
@@ -1111,7 +1115,7 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 			for key := range helpPatterns {
 				gp.Field = key
 				gp.Patterns = helpPatterns[key]
-				for i, _ := range gp.Patterns {
+				for i := range gp.Patterns {
 					gp.Patterns[i], _ = toElasticPipelineSelectorExpression(gp.Patterns[i], GrokContext)
 				}
 			}
@@ -1129,7 +1133,6 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 			onFailurePorcessors = DealWithTagOnFailure(attr, id, t)
 		case "break_on_match":
 			break_on_match = getBoolValue(attr)
-
 		default:
 			log.Warn().Msgf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
@@ -1205,15 +1208,22 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	}
 
 	elastic_addresses := []string{}
+
+	// First run to make sure we are dealing with constant-only expressions
 	constant := true
 	for _, a := range addresses {
-		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, CidrContext)
+		_, matchFound := toElasticPipelineSelectorExpression(a, CidrContext)
 		if matchFound {
 			constant = false
 		}
+	}
 
+	for _, a := range addresses {
+		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, CidrContext)
+		if !matchFound {
+			transformed_address = fmt.Sprintf("'%s'", transformed_address)
+		}
 		elastic_addresses = append(elastic_addresses, transformed_address)
-
 	}
 
 	params := make(map[string]interface{})
@@ -1238,7 +1248,7 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 					return;
 			}
 		} catch (IllegalArgumentException e) {
-			// We deliberately ignore wrongly formatted ip addresses caused by string interpolation
+			/* We deliberately ignore wrongly formatted ip addresses caused by string interpolation */
 		}
     }
 }
@@ -1850,6 +1860,9 @@ func DealWithMissingTranspiler(plugin ast.Plugin, constraint Constraints) []Inge
 func transpileConstraint(constraint Constraints) *string {
 	if len(constraint.Conditions) == 0 {
 		return nil
+	}
+	if len(constraint.Conditions) == 1 {
+		return pointer(transpileCondition(constraint.Conditions[0]))
 	}
 	converted := "("
 	for i, cond := range constraint.Conditions {
