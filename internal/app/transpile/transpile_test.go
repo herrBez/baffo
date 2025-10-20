@@ -236,3 +236,61 @@ func TestEndToEnd(t *testing.T) {
 		})
 	}
 }
+
+func TestToElasticPipelineSelectorExpression(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		context     int
+		expected    string
+		expectMatch bool
+	}{
+		{
+			name:        "ProcessorContext simple field",
+			input:       "foo_%{[bar]}",
+			context:     ProcessorContext,
+			expected:    "foo_{{{bar}}}",
+			expectMatch: true,
+		},
+		{
+			name:        "CidrContext field in middle",
+			input:       "cidr_%{[baz]}_x",
+			context:     CidrContext,
+			expected:    "'cidr_' + $('baz', '') + '_x'",
+			expectMatch: true,
+		},
+		{
+			name:        "CidrContext field in middle",
+			input:       "192.168.%{[pippo][puppo]}",
+			context:     CidrContext,
+			expected:    "'192.168.' + $('pippo.puppo', '')",
+			expectMatch: true,
+		},
+		{
+			name:        "CidrContext field in middle",
+			input:       "168.%{[pippo][puppo]}.33",
+			context:     CidrContext,
+			expected:    "'168.' + $('pippo.puppo', '') + '.33'",
+			expectMatch: true,
+		},
+		{
+			name:        "CidrContext field in middle",
+			input:       "192.168.1.33",
+			context:     CidrContext,
+			expected:    "192.168.1.33",
+			expectMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, matched := toElasticPipelineSelectorExpression(tt.input, tt.context)
+			if got != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, got)
+			}
+			if matched != tt.expectMatch {
+				t.Errorf("expected match=%v, got %v", tt.expectMatch, matched)
+			}
+		})
+	}
+}

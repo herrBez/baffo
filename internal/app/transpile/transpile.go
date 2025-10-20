@@ -578,6 +578,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 			var fieldValue = toElasticPipelineSelectorCondition(toElasticPipelineSelector(string(m[2 : len(m)-1])))
 
 			pos := field_finder.FindStringIndex(newS)
+
 			if firstRun && pos[0] != 0 {
 				firstRun = false
 				startWithSelector = false
@@ -592,13 +593,17 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 			newS = strings.Replace(newS, string(m), fieldValue, 1)
 
 		case CidrContext:
-			// Special version of the ScriptContext where we use a default of empty string
+			// Special version of the CIDRContext where we use a default of empty string
 			var fieldValue = "$('" + toElasticPipelineSelector(string(m[2:len(m)-1])) + "', '')"
 
 			pos := field_finder.FindStringIndex(newS)
+
 			if firstRun && pos[0] != 0 {
 				firstRun = false
 				startWithSelector = false
+			}
+			if firstRun {
+				firstRun = false
 			}
 
 			if pos[0] > 0 {
@@ -657,8 +662,7 @@ func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
 	if (context == ScriptContext || context == CidrContext) && !startWithSelector {
 		newS = "'" + newS
 	}
-
-	if (context == CidrContext) && newS[len(newS)-1] != ')' {
+	if matchFound && context == CidrContext && newS[len(newS)-1] != ')' {
 		newS = newS + "'"
 	}
 
@@ -1204,15 +1208,22 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	}
 
 	elastic_addresses := []string{}
+
+	// First run to make sure we are dealing with constant-only expressions
 	constant := true
 	for _, a := range addresses {
-		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, CidrContext)
+		_, matchFound := toElasticPipelineSelectorExpression(a, CidrContext)
 		if matchFound {
 			constant = false
 		}
+	}
 
+	for _, a := range addresses {
+		transformed_address, matchFound := toElasticPipelineSelectorExpression(a, CidrContext)
+		if !matchFound {
+			transformed_address = fmt.Sprintf("'%s'", transformed_address)
+		}
 		elastic_addresses = append(elastic_addresses, transformed_address)
-
 	}
 
 	params := make(map[string]interface{})
@@ -1237,7 +1248,7 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 					return;
 			}
 		} catch (IllegalArgumentException e) {
-			// We deliberately ignore wrongly formatted ip addresses caused by string interpolation
+			/* We deliberately ignore wrongly formatted ip addresses caused by string interpolation */
 		}
     }
 }
