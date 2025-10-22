@@ -145,7 +145,7 @@ func (t Transpile) MyIteration(root []ast.BranchOrPlugin, constraint Constraints
 
 			// Else
 			// else condition = "inherited + negate if condition + for 1..N negate else if $i condition"
-			tmp_ip = NewIngestPipeline(fmt.Sprintf("%s-elseß", branchName))
+			tmp_ip = NewIngestPipeline(fmt.Sprintf("%s-else", branchName))
 			t.MyIteration(block.ElseBlock.Block, NewConstraintLiteral(), applyPluginsFunc, &tmp_ip)
 
 			if !t.fidelity {
