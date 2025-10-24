@@ -21,9 +21,9 @@ This document lists the components the transpiler currently recognizes and the G
 | filter | [truncate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-truncate) | `DealWithTruncate` | ❌ Commented out in source (not active) |
 | filter | [urldecode](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-urldecode) | `DealWithURLDecode` | ✅ (Charset not supported) |
 | filter | [useragent](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-useragent) | `DealWithUserAgent` | ✅ (Caveats do apply with [ecs_compatibility: false](https://github.com/herrBez/baffo/issues/9)) |
-| output | [elasticsearch](https://www.elastic.co/docs/reference/logstash/plugins/plugins-outputs-elasticsearch) | `DealWithOutputElasticsearch` | We simply invoke the ingest pipeline specified in the Elasticsearch output if any |
+<!--- | output | [elasticsearch](https://www.elastic.co/docs/reference/logstash/plugins/plugins-outputs-elasticsearch) | `DealWithOutputElasticsearch` | Experimental: We simply invoke the ingest pipeline specified in the Elasticsearch output if any |
 | output | [pipeline](https://www.elastic.co/docs/reference/logstash/plugins/plugins-outputs-pipeline) | `DealWithOutputPipeline` | Experimental: We add a pipeline processor to invoke the (converted) invoked pipeline |
-
+--->
 Notes
 - The transpiler map shape is: map[string]map[string]TranspileProcessor — top-level keys are component types (`input`, `filter`, `output`).
 - To add a plugin, register its handler in the appropriate sub-map with the plugin name as key.
