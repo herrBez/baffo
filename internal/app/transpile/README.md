@@ -4,21 +4,21 @@ This document lists the components the transpiler currently recognizes and the G
 
 | Component | Plugin | Handler | Notes |
 |---|---:|---|---|
-| input | — | — | No input plugins registered (empty map) |
+| input | — | — | ❌ No input plugins registered (empty map) |
 | filter | [cidr](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-cidr) | `DealWithCidr` | 1. Refresh Interval is not supported 2. Converted as script, CIDR netmasks are not computed once |
 | filter | [csv](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-csv) | `DealWithCSV` | ✅ (Notably `autodetect_column_names` and `autogenearte_column_names` not supported) |
 | filter | [date](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-date) | `DealWithDate` | ✅ |
 | filter | [dissect](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-dissect) | `DealWithDissect` | ✅ |
 | filter | [drop](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-drop) | `DealWithDrop` | ✅ |
-| filter | [geoip](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-geoip) | `DealWithGeoIP` | Limited options available |
-| filter | [grok](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-grok) | `DealWithGrok` | Limited options available (notably no `patterns_dir`) |
-| filter | [json](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-json) | `DealWithJSON` | Limited options availale source and target. TODO: Add ecs_compatibility support|
+| filter | [geoip](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-geoip) | `DealWithGeoIP` | Limited configuration options available |
+| filter | [grok](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-grok) | `DealWithGrok` | Limited configuration options available (notably no `patterns_dir`) |
+| filter | [json](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-json) | `DealWithJSON` | Limited configuration options availale source and target. TODO: Add ecs_compatibility support|
 | filter | [kv](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-kv) | `DealWithKV` | Limited configuration options supported |
-| filter | [mutate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-mutate) | `DealWithMutate` | merge not supported|
+| filter | [mutate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-mutate) | `DealWithMutate` | ✅ (merge not supported yet) |
 | filter | [prune](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-prune) | `DealWithPrune` | Limited support |
 | filter | [syslog_pri](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-syslog_pri) | `DealWithSyslogPri` | ✅ (Converted as script) |
 | filter | [translate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-translate) | `DealWithTranslate` | ✅ (No external file dictionary available) |
-| filter | [truncate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-truncate) | `DealWithTruncate` | Commented out in source (not active) |
+| filter | [truncate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-truncate) | `DealWithTruncate` | ❌ Commented out in source (not active) |
 | filter | [urldecode](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-urldecode) | `DealWithURLDecode` | ✅ (Charset not supported) |
 | filter | [useragent](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-useragent) | `DealWithUserAgent` | ✅ (Caveats do apply with [ecs_compatibility: false](https://github.com/herrBez/baffo/issues/9)) |
 | output | [elasticsearch](https://www.elastic.co/docs/reference/logstash/plugins/plugins-outputs-elasticsearch) | `DealWithOutputElasticsearch` | We simply invoke the ingest pipeline specified in the Elasticsearch output if any |
