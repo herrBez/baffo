@@ -855,9 +855,6 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	proc := DateProcessor{}.WithTag(id).(DateProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
 		switch attr.Name() {
 		// It is a common field
 		case "tag_on_failure":
@@ -1105,9 +1102,6 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	gp := GrokProcessor{}.WithTag(id).(GrokProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
 		switch attr.Name() {
 		case "match":
 			helpPatterns := hashAttributeToMapArray(attr)
@@ -1158,9 +1152,6 @@ func DealWithURLDecode(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	udp := URLDecodeProcessor{}.WithTag(id).(URLDecodeProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
 		switch attr.Name() {
 		// It is a common field
 
@@ -1466,15 +1457,6 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	return ingestProcessors
 }
 
-func Contains[T comparable](s []T, e T) bool {
-	for _, v := range s {
-		if v == e {
-			return true
-		}
-	}
-	return false
-}
-
 func getProcessorID(plugin ast.Plugin) string {
 	id, err := plugin.ID()
 	if err != nil {
@@ -1495,9 +1477,6 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 	}.WithTag(id).(KVProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
 		switch attr.Name() {
 		// It is a common field
 		case "tag_on_failure":
@@ -1539,9 +1518,6 @@ func DealWithJSON(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	json := JSONProcessor{}.WithTag(id).(JSONProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
-			continue
-		}
 		switch attr.Name() {
 		case "source":
 			json.Field = getStringAttributeString(attr)
