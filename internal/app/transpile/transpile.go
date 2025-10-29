@@ -1883,7 +1883,7 @@ func DealWithOutputElasticsearch(plugin ast.Plugin, id string, t Transpile) ([]I
 	for _, attr := range plugin.Attributes {
 		switch attr.Name() {
 		case "pipeline":
-			pipeline, _ := toElasticPipelineSelectorExpression(attr.ValueString(), ProcessorContext)
+			pipeline := getStringAttributeString(attr)
 			ingestProcessors = append(ingestProcessors, PipelineProcessor{
 				Name: pipeline,
 			})
@@ -1940,7 +1940,7 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 		t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("filter"), &ip)
 	}
 	// for _, f := range c.Output {
-	// 	t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"), &ip)
+	//	t.MyIteration(f.BranchOrPlugins, NewConstraintLiteral(), applyFunc("output"), &ip)
 	// }
 
 	if t.addCleanUpProcessor {
