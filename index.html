@@ -13,6 +13,12 @@
   <script>
     const go = new Go();
 
+    go.argv = [
+      "transpile",
+      "--deal-with-error-locally=false",
+      "filter { mutate { add_field => { \"foo\" => \"bar\" } } }"
+     ];
+
     async function run() {
       const result = await WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject);
       go.run(result.instance);
