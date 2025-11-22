@@ -81,7 +81,7 @@
     
     // Buffers to collect the entire output stream during execution
     let stdoutBuffer = "";
-    let stderrBuffer = "";
+
 
 
     // --- Highlight.js Setup ---
@@ -105,7 +105,6 @@
         if (isEnabled) {
             // Reset buffers
             stdoutBuffer = "";
-            stderrBuffer = "";
 
             // 1. STDOUT CAPTURE (Overrides console.log, which captures fmt.Print)
             console.log = function(...args) {
@@ -113,19 +112,47 @@
                 const message = args.join(' ') + '\n';
                 stdoutBuffer += message; // Append to buffer
             };
-
-            // 2. STDERR CAPTURE (Overrides console.error, which captures log.Print or fmt.Fprint(os.Stderr))
-            console.error = function(...args) {
-                originalConsoleError.apply(console, args); 
-                const message = args.join(' ') + '\n';
-                // IMPORTANT: Append *everything* from console.error to the stderr buffer
-                stderrBuffer += message; 
-            };
         } else {
             // Restore originals
             console.log = originalConsoleLog;
             console.error = originalConsoleError;
         }
+    }
+
+    /**
+     * Filters the raw merged output buffer into separate STDOUT and STDERR buffers
+     * based on the presence of a 'level' field in the JSON object (indicating a log).
+     * @param {string} rawOutput The entire merged string output.
+     * @returns {{stdout: string, stderr: string}} Separated buffers.
+     */
+    function filterAndSeparateStreams(rawOutput) {
+        const lines = rawOutput.split('\n').filter(line => line.trim() !== '');
+        let stdoutLines = [];
+        let stderrLines = [];
+
+        for (const line of lines) {
+            try {
+                const json = JSON.parse(line);
+                // Check for the 'level' field (e.g., used by zerolog or other loggers)
+                if (json["log.level"]) {
+                    stderrLines.push(line);
+                } else {
+                    // Assume it's the final output pipeline JSON
+                    stdoutLines.push(line);
+                }
+            } catch (e) {
+                // If a line is not valid JSON, treat it as an error/unexpected output
+                // and put it into stderr for developer attention.
+                stderrLines.push(`[Non-JSON Output] ${line}`);
+            }
+        }
+        
+        // For the transpiler, stdout is usually one large JSON object, so we merge lines 
+        // back into a single string. Log entries (stderr) are kept separated by newline.
+        return {
+            stdout: stdoutLines.join('\n'), 
+            stderr: stderrLines.join('\n')
+        };
     }
     
     /**
@@ -193,7 +220,9 @@
       // Set CLI arguments
       go.argv = [
           "baffo",             
-          "transpile",         
+          "transpile",
+          "--idiomatic=true",
+          "--log_level=debug",
           "--inline=true",     
           inlineContent        
       ];
@@ -211,13 +240,16 @@
         stderrBuffer += `\n--- WASM RUNTIME ERROR (Fatal Crash) ---\n${e.message}\n`;
       } finally {
         // 3. Process output and restore console functions
+
+        const separated = filterAndSeparateStreams(stdoutBuffer);
         captureConsole(false);
         
         // STDOUT: Attempt JSON formatting and highlighting
-        processOutput(stdoutElement, stdoutBuffer, true); 
+        processOutput(stdoutElement, separated.stdout, true); 
+
         
         // STDERR: Display as plain text
-        processOutput(stderrElement, stderrBuffer, false);
+        processOutput(stderrElement, separated.stderr, false);
       }
     }
     
