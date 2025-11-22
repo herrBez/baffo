@@ -1,0 +1,200 @@
+/* Global Styles */
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #111827; /* Dark Gray / Near Black */
+  color: #f3f4f6; /* Light Gray / Off-White */
+  padding: 24px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+/* Main Container */
+.container {
+  /* --- CHANGE: Use 95% of the screen width for a broader layout --- */
+  width: 95%; 
+  /* Prevent it from getting absurdly large on giant monitors, setting a large max */
+  max-width: 1400px; 
+  margin: 0 auto;
+}
+
+/* Heading */
+h1 {
+  font-size: 1.875rem; 
+  font-weight: bold;
+  margin-bottom: 1.5rem; 
+  text-align: center;
+  /* Updated Accent Color: Cyan */
+  color: #22d3ee; 
+}
+h2 {
+    font-size: 1.2rem;
+    font-weight: normal;
+    text-align: center;
+    color: #6b7280; /* Gray-500 */
+    margin-bottom: 1.5rem;
+}
+
+
+/* Input Card */
+.input-card {
+  background-color: #1f2937; /* Gray-800 */
+  padding: 16px;
+  border-radius: 8px; 
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); 
+  margin-bottom: 1.5rem; 
+}
+
+/* Input Label */
+.input-label {
+  display: block;
+  font-size: 1.125rem; 
+  font-weight: 500; 
+  margin-bottom: 0.5rem; 
+  color: #d1d5db; /* Gray-300 */
+}
+
+/* --- Code Editor Layering Styles --- */
+#input-container textarea {
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 1rem;
+  border: 1px solid #333;
+  background-color: #1f2937;
+  color: #f3f4f6;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  resize: none;
+  caret-color: white;
+  box-sizing: border-box;
+  
+  /* Enforce fixed width for content and enable scrolling */
+  white-space: pre; 
+  overflow: auto;
+}
+
+#highlighted-code {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+#highlighted-code pre {
+  margin: 0;
+  padding: 1rem;
+  background-color: #1f2937 !important;
+  height: 100%;
+  /* Mirror textarea scroll settings */
+  white-space: pre; 
+  word-wrap: normal;
+  overflow: hidden; 
+  
+  box-sizing: border-box;
+}
+
+#input-container {
+  position: relative;
+  /* --- CHANGE: Fixed height for the input area --- */
+  height: 250px; 
+  border-radius: 8px;
+  overflow: hidden;
+}
+/* --- End Code Editor Layering Styles --- */
+
+/* Run Button */
+.run-button-wrapper {
+  margin-top: 1rem; 
+  display: flex;
+  justify-content: center;
+}
+.run-button {
+  /* Updated Accent Color: Cyan-600 */
+  background-color: #06b6d4; 
+  color: white;
+  font-weight: 600; 
+  padding: 8px 24px; 
+  border-radius: 8px; 
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+  transition: background-color 150ms ease-in-out;
+  border: none;
+  cursor: pointer;
+}
+.run-button:hover {
+  /* Updated Accent Color: Cyan-500 */
+  background-color: #22d3ee; 
+}
+
+/* Output Grid - Ensures both output boxes take up 50% width on larger screens */
+.output-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px; 
+  margin-top: 24px; 
+}
+@media (min-width: 768px) { 
+  .output-grid {
+    /* 1fr 1fr guarantees 50% for STDOUT and 50% for STDERR */
+    grid-template-columns: 1fr 1fr; 
+  }
+}
+
+/* Output Headers */
+.output-header {
+  font-size: 1.25rem; 
+  font-weight: 600; 
+  margin-bottom: 0.5rem; 
+}
+
+/* Output Console Styles */
+.output-box {
+  font-family: monospace;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow: auto; 
+  /* --- CHANGE: Force horizontal scroll for all output boxes --- */
+  white-space: pre; 
+  min-height: 150px;
+  flex-grow: 1;
+  display: block;
+  /* Default dark background for all output boxes */
+  background-color: #1f2937; 
+  color: #f3f4f6;
+  border: 1px solid #374151; /* Subtle border */
+}
+
+/* STDOUT Styles */
+#stdout-output-container {
+  position: relative; 
+  min-height: 150px;
+}
+#stdout-output-container pre {
+    margin: 0;
+    padding: 1rem;
+    background-color: #1f2937 !important; 
+    color: #f3f4f6;
+    border-radius: 0.5rem;
+    /* --- CHANGE: Force horizontal scroll for JSON output --- */
+    white-space: pre; 
+}
+.stdout-header { 
+    /* Primary Accent Color for STDOUT Header */
+    color: #22d3ee; 
+}
+
+/* STDERR Styles */
+#stderr-output {
+  /* Retains dark background, but keeps error text */
+}
+.stderr-header { 
+    /* Warning/Error Accent Color: Orange */
+    color: #f97316; 
+}
