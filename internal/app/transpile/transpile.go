@@ -1976,14 +1976,15 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 }
 
 func printPipeline(ips []IngestPipeline) {
-	fmt.Printf("{")
+	output := "{"
 	for i, pipeline := range ips {
-		fmt.Printf("\"%s\": %s ", pipeline.Name, pipeline)
+		output += fmt.Sprintf("\"%s\": %s ", pipeline.Name, pipeline)
 		if i < len(ips)-1 {
-			fmt.Printf(",")
+			output += ","
 		}
 	}
-	fmt.Printf("}")
+	output += "}"
+	fmt.Println(output)
 }
 
 func getAllIngestPipeline(main IngestPipeline) []IngestPipeline {
