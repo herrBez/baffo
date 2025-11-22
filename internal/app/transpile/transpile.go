@@ -36,9 +36,10 @@ type Transpile struct {
 	addDefaultGlobalOnFailure bool
 	fidelity                  bool
 	addCleanUpProcessor       bool
+	inline                    bool
 }
 
-func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool) Transpile {
+func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool, inline bool) Transpile {
 	return Transpile{
 		threshold:                 threshold,
 		log_level:                 level[strings.ToLower(log_level)],
@@ -46,6 +47,7 @@ func New(threshold int, log_level string, deal_with_error_locally bool, addDefau
 		addDefaultGlobalOnFailure: addDefaultGlobalOnFailure,
 		fidelity:                  fidelity,
 		addCleanUpProcessor:       addCleanupProcessor,
+		inline:                    inline,
 	}
 }
 
@@ -66,34 +68,49 @@ func (t Transpile) Run(args []string) error {
 	var result *multierror.Error
 	ips := []IngestPipeline{}
 
-	for _, filename := range args {
-		stat, err := os.Stat(filename)
+	var res interface{}
+	var err error
+
+	if t.inline {
+		if len(args) != 1 {
+			return errors.New("when using inline mode only one file can be provided")
+		}
+		filename := "inline-input"
+		content := []byte(args[0])
+
+		res, err = config.Parse(filename, content, config.IgnoreComments(true))
 		if err != nil {
-			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
-			continue
-		}
-		if stat.IsDir() {
-			continue
-		}
-
-		res, err1 := config.ParseFile(filename, config.IgnoreComments(true))
-
-		if err1 != nil {
-			log.Warn().Msgf("%s %s %s", err1, res, reflect.TypeOf(res))
-
-			// if errMsg, hasErr := config.GetFarthestFailure(); hasErr {
-			// 	if !strings.Contains(err.Error(), errMsg) {
-			// 		err = errors.Errorf("%s: %v\n%s", filename, err, errMsg)
-			// 	}
-			// }
+			log.Warn().Msgf("%s %s %s", err, res, reflect.TypeOf(res))
 			// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
-			// continue
+			return err
 		} else {
 			var tree ast.Config = res.(ast.Config)
 			log.Debug().Msgf("Parse Tree: %#v", tree)
 
 			ips = append(ips, t.buildIngestPipeline(filename, tree)...)
+		}
 
+	} else {
+		for _, filename := range args {
+			stat, err := os.Stat(filename)
+			if err != nil {
+				result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+				continue
+			}
+			if stat.IsDir() {
+				continue
+			}
+			res, err = config.ParseFile(filename, config.IgnoreComments(true))
+			if err != nil {
+				log.Warn().Msgf("%s %s %s", err, res, reflect.TypeOf(res))
+				// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+				continue
+			} else {
+				var tree ast.Config = res.(ast.Config)
+				log.Debug().Msgf("Parse Tree: %#v", tree)
+
+				ips = append(ips, t.buildIngestPipeline(filename, tree)...)
+			}
 		}
 	}
 

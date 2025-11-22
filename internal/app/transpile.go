@@ -16,6 +16,7 @@ var (
 	add_default_global_on_failure bool
 	fidelity                      bool
 	add_cleanup_processor         bool
+	inline                        bool
 )
 
 func makeTranspileCmd() *cobra.Command {
@@ -58,11 +59,11 @@ func makeTranspileCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&add_default_global_on_failure, "add_default_global_on_failure", false, "whether to add a default global on failure")
 	cmd.Flags().BoolVar(&fidelity, "fidelity", true, "try to keep correct if-else semantic")
 	cmd.Flags().BoolVar(&add_cleanup_processor, "add_cleanup_processor", true, "add a cleanup processor to remove temporary fields created by the transpiler")
-
+	cmd.Flags().BoolVar(&inline, "inline", false, "whether the input is provided inline or via file paths(default false)")
 	return cmd
 }
 
 func runTranspile(cmd *cobra.Command, args []string) error {
-	check := transpile.New(pipeline_threshold, log_level, deal_with_error_locally, add_default_global_on_failure, fidelity, add_cleanup_processor)
+	check := transpile.New(pipeline_threshold, log_level, deal_with_error_locally, add_default_global_on_failure, fidelity, add_cleanup_processor, inline)
 	return check.Run(args)
 }

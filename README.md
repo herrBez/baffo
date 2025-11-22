@@ -51,7 +51,8 @@ For the transpilation we have different flags at disposal:
 - `deal_with_error_locally`: whether to deal with the errors locally à là Logstash (e.g., by adding the tag on error by default)
 - `fidelity`: whether we want to keep the correct the if-else semantic, i.e., calculating the condition only once
 - `pipeline_threshold`: determine how many processors will cause the creation of a new pipeline when converting if-else statements
-- `--add_cleanup_processor`: whether we add a final remove processor to remove temporary fields created by the transpiler (and the `@metadata` field)
+- `add_cleanup_processor`: whether we add a final remove processor to remove temporary fields created by the transpiler (and the `@metadata` field)
+- `inline`: whether the positional arguments are the script or a path to the script (default)
 
 By default, we try to keep the semantics as close as possible with the original Logstash Pipeline. To obtain idiomatic pipelines, consider using the following settings:
 
@@ -73,7 +74,8 @@ baffo transpile /dev/stdin --deal_with_error_locally=false \
   --pipeline_threshold 10 \
   --add_default_global_on_failure=true \
   --fidelity=false \
-  <<< 'filter{ mutate { add_field => {"[test]" => "foo"}}}'
+  --inline=true \
+  'filter{ mutate { add_field => {"[test]" => "foo"}}}'
 ```
 
 The program outputs a JSON Dictionary with one entry per generated pipeline.
