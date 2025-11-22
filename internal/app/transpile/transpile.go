@@ -1,6 +1,7 @@
 package transpile
 
 import (
+	"encoding/json"
 	"os"
 	"path"
 	"regexp"
@@ -1976,14 +1977,36 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 }
 
 func printPipeline(ips []IngestPipeline) {
-	output := "{"
-	for i, pipeline := range ips {
-		output += fmt.Sprintf("\"%s\": %s ", pipeline.Name, pipeline)
-		if i < len(ips)-1 {
-			output += ","
+	// 1. Create a map to represent the top-level JSON object
+	data := make(map[string]interface{})
+
+	// 2. Populate the map with pipeline data
+	for _, pipeline := range ips {
+		// Assuming pipeline.String() returns a valid JSON string (even if multi-line).
+		// We'll unmarshal that inner JSON first so we can put the actual data
+		// (not the string representation) into the top-level map.
+		var pipelineData interface{}
+		err := json.Unmarshal([]byte(pipeline.String()), &pipelineData)
+		if err != nil {
+			// Handle error if inner pipeline string isn't valid JSON
+			fmt.Printf("Error unmarshaling pipeline %s: %v\n", pipeline.Name, err)
+			continue
 		}
+
+		data[pipeline.Name] = pipelineData
 	}
-	output += "}"
+
+	// 3. Marshal the map into a compact JSON byte slice (single-line)
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Panic().Msgf("Error marshaling final JSON: %v\n", err)
+		return
+	}
+
+	// 4. Convert the byte slice to a string and print
+	// json.Marshal guarantees a compact, single-line output by default.
+	output := string(jsonBytes)
+
 	fmt.Println(output)
 }
 
