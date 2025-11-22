@@ -9,20 +9,63 @@
 
   <button onclick="run()">Run Program</button>
 
+  <input type="text" id="input" placeholder="Type here...">
+  <pre id="output"></pre>
+
   <script src="wasm_exec.js"></script>
   <script>
-    const go = new Go();
+    var go = new Go();
+    const outputElement = document.getElementById("output");
+    const originalConsoleLog = console.log;
+    /**
+     * Replaces the native console.log to redirect output to the HTML element.
+     */
+    function captureConsole(isEnabled) {
+        if (isEnabled) {
+            outputElement.textContent = ''; // Clear previous output
+            
+            // Override console.log
+            console.log = function(...args) {
+                // 1. Still log to the browser console (for debugging)
+                originalConsoleLog.apply(console, args); 
 
-    go.argv = [
-      "transpile",
-      "--deal_with_error_locally=false",
-      "filter { mutate { add_field => { \"foo\" => \"bar\" } } }"
-     ];
+                // 2. Append to the HTML element
+                const message = args.join(' ') + '\n';
+                outputElement.textContent += message;
+            };
+        } else {
+            // Restore the original console.log
+            console.log = originalConsoleLog;
+        }
+    }
 
     async function run() {
-      const result = await WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject);
-      go.run(result.instance);
+      // 1. Prepare input and enable output capture
+      window.baffoInput = document.getElementById("input").value;
+      captureConsole(true); 
+
+      try {
+        // 2. Run the WASM module
+        // Reset the Go instance (important for subsequent runs)
+        if (go.exited) {
+          go = new Go();
+        }
+        go.argv = ["baffo", "transpile", window.baffoInput];
+
+        
+        const result = await WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject);
+        await go.run(result.instance);
+      } catch (e) {
+        // Handle potential errors during Go execution
+        console.error("WASM Execution Error:", e);
+        outputElement.textContent += "\n--- ERROR ---\n" + e.message;
+      } finally {
+        // 3. Disable output capture and restore console.log
+        captureConsole(false); 
+      }
     }
   </script>
+  <body>
+	
 </body>
 </html>
