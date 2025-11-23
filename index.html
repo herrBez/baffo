@@ -6,27 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Baffo</title>
 
-  <!-- Link to the separate custom stylesheet -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- Highlight.js CSS for Ruby Syntax Highlighting -->
   <link rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
 
-  <!-- Load Tailwind CSS for utility classes -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
 </head>
 
-<body class="font-sans">
+<body>
 
   <div class="container">
     <h1>Baffo</h1>
     <h2>Transpile Logstash Pipelines to Elasticsearch Ingest Pipelines</h2>
 
     <div class="toolbar">
-
-
       <div class="toolbar-item">
         <label
           title="if enabled, we try to compute if-else conditions upfront to guarantee semantic equivalence (not idiomatic)">
@@ -61,11 +54,9 @@
         <label for="opt-pipeline-threshold"
           title=" determine how many processors will cause the creation of a new pipeline in conditions">Pipeline
           Threshold</label>
-        <!-- <input type="number" id="opt-pipeline-threshold" value="4" min="1"> -->
         <input type="range" id="opt-pipeline-threshold" name="opt-pipeline-threshold" min="1" max="10" value="4"
           onchange="updateTextInput(this.value);">
         <span id="textInput">4</span>
-
       </div>
 
 
@@ -80,21 +71,14 @@
       </div>
     </div>
 
-
-
-
     <div class="main-layout">
-
       <div class="lhs">
         <h2 class="output-header stdout-header">Logstash Pipeline</h2>
-
         <div class="input-card">
           <div id="input-container">
-            <!-- Textarea where user types -->
             <textarea id="code-input" rows="10" spellcheck="false" oninput="updateHighlight()"
               onscroll="syncScroll(this, 'highlighted-code')"></textarea>
 
-            <!-- Pre block for highlighting -->
             <div id="highlighted-code">
               <pre><code></code></pre>
             </div>
@@ -108,18 +92,16 @@
 
       <div class="divider"></div>
 
-
       <div class="rhs">
         <div class="output-grid">
-
-          <div class="flex flex-col">
+          <div class="flex">
             <h2 class="output-header stdout-header">Standard Output (stdout) - JSON Formatted</h2>
             <pre id="stdout-container" class="output-box">
           <code id="stdout-code" class="language-json">No program executed yet.</code>
         </pre>
           </div>
 
-          <div class="flex flex-col">
+          <div class="flex">
             <h2 class="output-header stderr-header">Standard Error (stderr) - JSON Log Lines</h2>
             <pre id="stderr-container" class="output-box">
           <code id="stderr-code" class="language-json">No program executed yet.</code>
@@ -128,18 +110,13 @@
 
         </div>
       </div>
-
     </div>
 
 
-    <!-- WASM Runner -->
     <script src="wasm_exec.js"></script>
-    <!-- Highlight.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <!-- Highlight.js Language Definitions -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/ruby.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
-    <!-- ACTION: Added Properties language support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/properties.min.js"></script>
 
     <script>
