@@ -272,11 +272,11 @@ html, body {
 }
 
 .log-level-info {
-  color: #d4d4d4;
+  color: #0b6fb6;
   border-left-color: #444;
 }
 
-.log-level-warning {
+.log-level-warn {
   color: #cca700;
   border-left-color: #cca700;
   background-color: rgba(204, 167, 0, 0.05);

@@ -204,11 +204,11 @@ function updateHighlight() {
         try {
           const json = JSON.parse(line);
           if (json["log.level"]) {
-            finalStderrLines.push("[" + json["log.level"].toUpperCase() + "] " + json["message"]);
+            finalStderrLines.push(line);
           } else {
             finalStdoutLines.push(line);
           }
-        } catch (e) {
+        } catch (e) { // Line not correctly formatted are treated as stderr
           finalStderrLines.push(line);
         }
       }
@@ -217,6 +217,46 @@ function updateHighlight() {
         stdout: finalStdoutLines.join('\n'),
         stderr: finalStderrLines.join('\n')
       };
+    }
+
+    // 2. Log Stream Renderer (for stderr)
+    function renderLogStream(targetElement, buffer) {
+        targetElement.innerHTML = "";
+        targetElement.className = "";
+        
+        const lines = buffer.split('\n');
+        let lineNumber = 0; // Initialize counter
+
+        if (buffer.trim() === "") {
+            targetElement.textContent = "--- No logs ---";
+            return;
+        }
+
+        lines.forEach(line => {
+            if (line.trim() === "") return;
+            
+            lineNumber++; // Increment counter for each line
+
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+
+            try {
+                const json = JSON.parse(line);
+                const msg = ("[" + json["log.level"].toUpperCase() + "] " + json.message) || line;
+                const level = (json["log.level"] || "info").toLowerCase();
+
+                // ADD LINE NUMBER TO CONTENT
+                div.textContent = `${lineNumber}.  ${msg}`; 
+                
+                div.classList.add(`log-level-${level}`);
+            } catch (e) {
+                // Raw text fallback
+                div.textContent = `${lineNumber}.  ${line}`; 
+                div.classList.add('log-level-info');
+            }
+
+            targetElement.appendChild(div);
+        });
     }
 
     function processOutput(targetElement, buffer, formatAsJson) {
@@ -288,7 +328,8 @@ function updateHighlight() {
 
         // Pass the inner CODE elements to the processor
         processOutput(stdoutCodeElement, separated.stdout, true);
-        processOutput(stderrCodeElement, separated.stderr, true);
+        // processOutput(stderrCodeElement, separated.stderr, true);
+        renderLogStream(stderrCodeElement, separated.stderr);
       }
     }
 
