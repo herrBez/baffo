@@ -145,6 +145,8 @@ var transpiler = map[string]map[string]TranspileProcessor{
 		"syslog_pri": DealWithSyslogPri,
 		"csv":        DealWithCSV,
 		"json":       DealWithJSON,
+		"aggregate":  DealWithUnfeasiblePlugin,
+		"split":      DealWithUnfeasiblePlugin,
 		// "truncate":   DealWithTruncate,
 	},
 	"output": {
@@ -837,6 +839,14 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 
 }
 
+func DealWithUnfeasiblePlugin(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
+
+	log.Error().Msgf("[Pos %s] The Plugin %s cannot be converted to an Elasticsearch Ingest Pipeline", plugin.Pos(), plugin.Name())
+	log.Debug().Msgf("Plugin definition: %s", plugin)
+
+	return []IngestProcessor{}, []IngestProcessor{}
+}
+
 func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
@@ -1421,7 +1431,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 
 	DealWithPluginFunction, ok := transpiler[section][plugin.Name()]
 	if !ok {
-		log.Warn().Msgf("There is no handler for the %s plugin of type '%s' (with id '%s')\nReturning an empty processors list", section, plugin.Name(), id)
+		log.Warn().Msgf("The plugin '%s' (with id '%s') in the %s section is unknown: we will return an empty processors list", plugin.Name(), section, id)
 		return []IngestProcessor{}
 	}
 

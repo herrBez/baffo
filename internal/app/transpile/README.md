@@ -5,6 +5,7 @@ This document lists the components the transpiler currently recognizes and the G
 | Component | Plugin | Handler | Notes |
 |---|---:|---|---|
 | input | — | — | ❌ No input plugins registered (empty map) |
+| filter | [aggregate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-aggregate) | `DealWithUnfeasiblePlugin` | ❌ Returns an error and return an empty processor list. There is no way to aggregate in Elasticsearch Ingest Pipelines |
 | filter | [cidr](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-cidr) | `DealWithCidr` | 1. Refresh Interval is not supported 2. Converted as script, CIDR netmasks are not computed once |
 | filter | [csv](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-csv) | `DealWithCSV` | ✅ (Notably `autodetect_column_names` and `autogenearte_column_names` not supported) |
 | filter | [date](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-date) | `DealWithDate` | ✅ |
@@ -16,6 +17,7 @@ This document lists the components the transpiler currently recognizes and the G
 | filter | [kv](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-kv) | `DealWithKV` | Limited configuration options supported |
 | filter | [mutate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-mutate) | `DealWithMutate` | ✅ (merge not supported yet) |
 | filter | [prune](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-prune) | `DealWithPrune` | Limited support |
+| filter | [split](http://elastic.co/docs/reference/logstash/plugins/plugins-filters-split) | `DealWithUnfeasiblePlugin` | ❌ Returns an error and return an empty processor list. There is no way to replicate the split logic |
 | filter | [syslog_pri](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-syslog_pri) | `DealWithSyslogPri` | ✅ (Converted as script) |
 | filter | [translate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-translate) | `DealWithTranslate` | ✅ (No external file dictionary available) |
 | filter | [truncate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-truncate) | `DealWithTruncate` | ❌ Commented out in source (not active) |
