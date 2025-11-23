@@ -40,6 +40,11 @@ func makeTranspileCmd() *cobra.Command {
 				if add_default_global_on_failure {
 					return fmt.Errorf("--idiomatic and --add_default_global_on_failure cannot be specified together")
 				}
+				/* Idiomatic settings is a preset*/
+				pipeline_threshold = 4
+				fidelity = false
+				deal_with_error_locally = false
+				add_default_global_on_failure = true
 			}
 
 			switch log_level {
