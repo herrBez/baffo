@@ -15,59 +15,63 @@
 
 <body>
 
+
+
   <div class="container">
-    <h1>Baffo</h1>
-    <h2>Transpile Logstash Pipelines to Elasticsearch Ingest Pipelines</h2>
+    <div class="header">
+      <h1>Baffo</h1>
+      <h2>Transpile Logstash Pipelines to Elasticsearch Ingest Pipelines</h2>
 
-    <div class="toolbar">
-      <div class="toolbar-item">
-        <label
-          title="if enabled, we try to compute if-else conditions upfront to guarantee semantic equivalence (not idiomatic)">
-          <input type="checkbox" id="opt-fidelity">
-          Fidelity Mode
-        </label>
-      </div>
+      <div class="toolbar">
+        <div class="toolbar-item">
+          <label
+            title="if enabled, we try to compute if-else conditions upfront to guarantee semantic equivalence (not idiomatic)">
+            <input type="checkbox" id="opt-fidelity">
+            Fidelity Mode
+          </label>
+        </div>
 
-      <div class="toolbar-item">
-        <label title="if enabled, we deal with errors locally like Logstash (add_tag_on_failure)">
-          <input type="checkbox" id="opt-deal-with-error-locally">
-          Deal With Errors Locally
-        </label>
-      </div>
+        <div class="toolbar-item">
+          <label title="if enabled, we deal with errors locally like Logstash (add_tag_on_failure)">
+            <input type="checkbox" id="opt-deal-with-error-locally">
+            Deal With Errors Locally
+          </label>
+        </div>
 
-      <div class="toolbar-item">
-        <label title="if enabled, we add a default global on_failure to the main pipeline">
-          <input type="checkbox" id="opt-default-global-on-failure" checked>
-          Add Default Global On Failure
-        </label>
-      </div>
-
-
-      <div class="toolbar-item">
-        <label title="if enabled, we add a cleanup processor to the pipeline (remove @metadata and temporary fields)">
-          <input type="checkbox" id="opt-add-cleanup-processor" checked>
-          Add Cleanup Processor
-        </label>
-      </div>
-
-      <div class="toolbar-item">
-        <label for="opt-pipeline-threshold"
-          title=" determine how many processors will cause the creation of a new pipeline in conditions">Pipeline
-          Threshold</label>
-        <input type="range" id="opt-pipeline-threshold" name="opt-pipeline-threshold" min="1" max="10" value="4"
-          onchange="updateTextInput(this.value);">
-        <span id="textInput">4</span>
-      </div>
+        <div class="toolbar-item">
+          <label title="if enabled, we add a default global on_failure to the main pipeline">
+            <input type="checkbox" id="opt-default-global-on-failure" checked>
+            Add Default Global On Failure
+          </label>
+        </div>
 
 
-      <div class="toolbar-item">
-        <label for="opt-log-level">Log Level:</label>
-        <select id="opt-log-level">
-          <option value="debug">Debug</option>
-          <option value="info" selected="selected">Info</option>
-          <option value="warning">Warning</option>
-          <option value="error">Error</option>
-        </select>
+        <div class="toolbar-item">
+          <label title="if enabled, we add a cleanup processor to the pipeline (remove @metadata and temporary fields)">
+            <input type="checkbox" id="opt-add-cleanup-processor" checked>
+            Add Cleanup Processor
+          </label>
+        </div>
+
+        <div class="toolbar-item">
+          <label for="opt-pipeline-threshold"
+            title=" determine how many processors will cause the creation of a new pipeline in conditions">Pipeline
+            Threshold</label>
+          <input type="range" id="opt-pipeline-threshold" name="opt-pipeline-threshold" min="1" max="10" value="4"
+            onchange="updateTextInput(this.value);">
+          <span id="textInput">4</span>
+        </div>
+
+
+        <div class="toolbar-item">
+          <label for="opt-log-level">Log Level:</label>
+          <select id="opt-log-level">
+            <option value="debug">Debug</option>
+            <option value="info" selected="selected">Info</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -94,204 +98,210 @@
 
       <div class="rhs">
         <div class="output-grid">
-          <div class="flex">
+          
+          <div class="output-item">
             <h2 class="output-header stdout-header">Standard Output (stdout) - JSON Formatted</h2>
             <pre id="stdout-container" class="output-box">
-          <code id="stdout-code" class="language-json">No program executed yet.</code>
-        </pre>
+              <code id="stdout-code" class="language-json">No program executed yet.</code>
+            </pre>
           </div>
 
-          <div class="flex">
+          <div class="output-item">
             <h2 class="output-header stderr-header">Standard Error (stderr) - JSON Log Lines</h2>
             <pre id="stderr-container" class="output-box">
-          <code id="stderr-code" class="language-json">No program executed yet.</code>
-        </pre>
+              <code id="stderr-code" class="language-json">No program executed yet.</code>
+            </pre>
           </div>
-
         </div>
       </div>
     </div>
+  </div>
 
 
-    <script src="wasm_exec.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/ruby.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/properties.min.js"></script>
+  <script src="wasm_exec.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/ruby.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/properties.min.js"></script>
 
-    <script>
-      let go = new Go();
+  <script>
+    let go = new Go();
 
-      // Updated element references to target the inner CODE elements
-      const stdoutCodeElement = document.getElementById("stdout-code");
-      const stderrCodeElement = document.getElementById("stderr-code");
+    // Updated element references to target the inner CODE elements
+    const stdoutCodeElement = document.getElementById("stdout-code");
+    const stderrCodeElement = document.getElementById("stderr-code");
 
-      const inputElement = document.getElementById("code-input");
-      const codeElement = document.querySelector('#highlighted-code code');
+    const inputElement = document.getElementById("code-input");
+    const codeElement = document.querySelector('#highlighted-code code');
 
-      // Store original console functions globally
-      const originalConsoleLog = console.log;
-      const originalConsoleError = console.error;
+    // Store original console functions globally
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
 
-      // Buffers to collect the entire output stream during execution
-      let stdoutBuffer = "";
-      let stderrBuffer = "";
+    // Buffers to collect the entire output stream during execution
+    let stdoutBuffer = "";
+    let stderrBuffer = "";
 
-      // --- Highlight.js Setup ---
+    // --- Highlight.js Setup ---
 
-      function updateHighlight() {
-        const content = inputElement.value;
+function updateHighlight() {
+      const content = inputElement.value;
 
-        // ACTION: Use highlightAuto restricted to 'ruby' and 'properties'
-        // This automatically detects the language and returns the highlighted HTML
-        if (content.trim()) {
-          const result = hljs.highlightAuto(content, ['properties']);
+      if (content.trim()) {
+        // CHANGE: Force 'ruby' language.
+        // Logstash DSL structure (blocks {}) is closest to Ruby.
+        try {
+          const result = hljs.highlight(content, { language: 'ruby' });
           codeElement.innerHTML = result.value;
-          // Apply the detected language class for specific styling
-          codeElement.className = `hljs language-${result.language}`;
-        } else {
-          codeElement.innerHTML = '';
-          codeElement.className = '';
+          codeElement.className = `hljs language-ruby`;
+        } catch (e) {
+          // Fallback if something goes wrong
+          codeElement.textContent = content;
         }
-
-        syncScroll(inputElement, 'highlighted-code');
+      } else {
+        codeElement.innerHTML = '';
+        codeElement.className = '';
       }
 
-      function syncScroll(source, targetId) {
-        const target = document.getElementById(targetId);
-        target.scrollTop = source.scrollTop;
+      syncScroll(inputElement, 'highlighted-code');
+    }
+
+    function syncScroll(source, targetId) {
+      const target = document.getElementById(targetId);
+      target.scrollTop = source.scrollTop;
+    }
+
+    // --- I/O CAPTURE AND REDIRECTION ---
+
+    function captureConsole(isEnabled) {
+      if (isEnabled) {
+        stdoutBuffer = "";
+        stderrBuffer = "";
+
+        console.log = function (...args) {
+          const message = args.join(' ') + '\n';
+          stdoutBuffer += message;
+        };
+
+        console.error = function (...args) {
+          const message = args.join(' ') + '\n';
+          stderrBuffer += message;
+        };
+
+      } else {
+        console.log = originalConsoleLog;
+        console.error = originalConsoleError;
       }
+    }
 
-      // --- I/O CAPTURE AND REDIRECTION ---
+    function filterAndSeparateStreams(stdoutInput, stderrInput) {
+      const stdoutLines = stdoutInput.split('\n').filter(line => line.trim() !== '');
+      let finalStdoutLines = [];
+      let finalStderrLines = [...stderrInput.split('\n').filter(line => line.trim() !== '')];
 
-      function captureConsole(isEnabled) {
-        if (isEnabled) {
-          stdoutBuffer = "";
-          stderrBuffer = "";
-
-          console.log = function (...args) {
-            const message = args.join(' ') + '\n';
-            stdoutBuffer += message;
-          };
-
-          console.error = function (...args) {
-            const message = args.join(' ') + '\n';
-            stderrBuffer += message;
-          };
-
-        } else {
-          console.log = originalConsoleLog;
-          console.error = originalConsoleError;
-        }
-      }
-
-      function filterAndSeparateStreams(stdoutInput, stderrInput) {
-        const stdoutLines = stdoutInput.split('\n').filter(line => line.trim() !== '');
-        let finalStdoutLines = [];
-        let finalStderrLines = [...stderrInput.split('\n').filter(line => line.trim() !== '')];
-
-        for (const line of stdoutLines) {
-          try {
-            const json = JSON.parse(line);
-            if (json["log.level"]) {
-              finalStderrLines.push(line);
-            } else {
-              finalStdoutLines.push(line);
-            }
-          } catch (e) {
+      for (const line of stdoutLines) {
+        try {
+          const json = JSON.parse(line);
+          if (json["log.level"]) {
+            finalStderrLines.push("[" + json["log.level"].toUpperCase() + "] " + json["message"]);
+          } else {
             finalStdoutLines.push(line);
           }
-        }
-
-        return {
-          stdout: finalStdoutLines.join('\n'),
-          stderr: finalStderrLines.join('\n')
-        };
-      }
-
-      function processOutput(targetElement, buffer, formatAsJson) {
-        const trimmedBuffer = buffer.trim();
-
-        // Reset element's Highlight.js state
-        delete targetElement.dataset.highlighted;
-        targetElement.classList.remove('hljs');
-        targetElement.classList.remove('language-json');
-
-        if (trimmedBuffer === "") {
-          targetElement.textContent = `--- No output received. ---`;
-          return;
-        }
-
-        if (formatAsJson) {
-          try {
-            const jsonObject = JSON.parse(trimmedBuffer);
-            const formattedJson = JSON.stringify(jsonObject, null, 2);
-
-            targetElement.textContent = formattedJson;
-            targetElement.classList.add('language-json');
-            hljs.highlightElement(targetElement);
-
-          } catch (e) {
-            targetElement.textContent = trimmedBuffer;
-            targetElement.classList.add('language-json');
-            hljs.highlightElement(targetElement);
-          }
-        } else {
-          targetElement.textContent = trimmedBuffer;
-        }
-      }
-
-      // --- RUN FUNCTION ---
-      async function run() {
-        const inlineContent = inputElement.value;
-        stdoutCodeElement.textContent = 'Running program... capturing output buffer.';
-        stderrCodeElement.textContent = 'Running program... capturing error buffer.';
-
-        if (go.exited) {
-          go = new Go();
-        }
-
-        go.argv = [
-          "baffo",
-          "transpile",
-          "--deal_with_error_locally=" + (document.getElementById("opt-deal-with-error-locally").checked ? "true" : "false"),
-          "--pipeline_threshold=" + document.getElementById("opt-pipeline-threshold").value,
-          "--fidelity=" + (document.getElementById("opt-fidelity").checked ? "true" : "false"),
-          "--add_default_global_on_failure=" + (document.getElementById("opt-default-global-on-failure").checked ? "true" : "false"),
-          "--add_cleanup_processor=" + (document.getElementById("opt-add-cleanup-processor").checked ? "true" : "false"),
-          "--log_level=" + document.getElementById("opt-log-level").value,
-          "--inline=true",
-          inlineContent
-        ];
-
-        captureConsole(true);
-
-        try {
-          const result = await WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject);
-          await go.run(result.instance);
         } catch (e) {
-          originalConsoleError("WASM Execution Error (Fatal):", e);
-          stderrBuffer += `\n--- WASM RUNTIME ERROR (Fatal Crash) ---\n${e.message}\n`;
-        } finally {
-          const separated = filterAndSeparateStreams(stdoutBuffer, stderrBuffer);
-          captureConsole(false);
-
-          // Pass the inner CODE elements to the processor
-          processOutput(stdoutCodeElement, separated.stdout, true);
-          processOutput(stderrCodeElement, separated.stderr, true);
+          finalStderrLines.push(line);
         }
       }
 
-      // --- Initial Setup Execution ---
-      (function initialSetup() {
-        inputElement.value = "input{\n}\n\nfilter{\n  mutate {\n    add_field => {\n      \"[test]\" => \"foo\"\n    }\n  }\n}\n\noutput{\n}";
-        updateHighlight();
-      })();
+      return {
+        stdout: finalStdoutLines.join('\n'),
+        stderr: finalStderrLines.join('\n')
+      };
+    }
 
-      function updateTextInput(val) {
-        document.getElementById('textInput').textContent = val;
+    function processOutput(targetElement, buffer, formatAsJson) {
+      const trimmedBuffer = buffer.trim();
+
+      // Reset element's Highlight.js state
+      delete targetElement.dataset.highlighted;
+      targetElement.classList.remove('hljs');
+      targetElement.classList.remove('language-json');
+
+      if (trimmedBuffer === "") {
+        targetElement.textContent = `--- No output received. ---`;
+        return;
       }
-    </script>
+
+      if (formatAsJson) {
+        try {
+          const jsonObject = JSON.parse(trimmedBuffer);
+          const formattedJson = JSON.stringify(jsonObject, null, 2);
+
+          targetElement.textContent = formattedJson;
+          targetElement.classList.add('language-json');
+          hljs.highlightElement(targetElement);
+
+        } catch (e) {
+          targetElement.textContent = trimmedBuffer;
+          targetElement.classList.add('language-json');
+          hljs.highlightElement(targetElement);
+        }
+      } else {
+        targetElement.textContent = trimmedBuffer;
+      }
+    }
+
+    // --- RUN FUNCTION ---
+    async function run() {
+      const inlineContent = inputElement.value;
+      stdoutCodeElement.textContent = 'Running program... capturing output buffer.';
+      stderrCodeElement.textContent = 'Running program... capturing error buffer.';
+
+      if (go.exited) {
+        go = new Go();
+      }
+
+      go.argv = [
+        "baffo",
+        "transpile",
+        "--deal_with_error_locally=" + (document.getElementById("opt-deal-with-error-locally").checked ? "true" : "false"),
+        "--pipeline_threshold=" + document.getElementById("opt-pipeline-threshold").value,
+        "--fidelity=" + (document.getElementById("opt-fidelity").checked ? "true" : "false"),
+        "--add_default_global_on_failure=" + (document.getElementById("opt-default-global-on-failure").checked ? "true" : "false"),
+        "--add_cleanup_processor=" + (document.getElementById("opt-add-cleanup-processor").checked ? "true" : "false"),
+        "--log_level=" + document.getElementById("opt-log-level").value,
+        "--inline=true",
+        inlineContent
+      ];
+
+      captureConsole(true);
+
+      try {
+        const result = await WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject);
+        await go.run(result.instance);
+      } catch (e) {
+        originalConsoleError("WASM Execution Error (Fatal):", e);
+        stderrBuffer += `\n--- WASM RUNTIME ERROR (Fatal Crash) ---\n${e.message}\n`;
+      } finally {
+        const separated = filterAndSeparateStreams(stdoutBuffer, stderrBuffer);
+        captureConsole(false);
+
+        // Pass the inner CODE elements to the processor
+        processOutput(stdoutCodeElement, separated.stdout, true);
+        processOutput(stderrCodeElement, separated.stderr, true);
+      }
+    }
+
+    // --- Initial Setup Execution ---
+    (function initialSetup() {
+      inputElement.value = "input{\n}\n\nfilter{\n  mutate {\n    add_field => {\n      \"[test]\" => \"foo\"\n    }\n  }\n}\n\noutput{\n}";
+      updateHighlight();
+    })();
+
+    function updateTextInput(val) {
+      document.getElementById('textInput').textContent = val;
+    }
+  </script>
 </body>
 
 </html>
