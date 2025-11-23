@@ -8,15 +8,10 @@ body {
   padding: 24px;
   min-height: 100vh;
   margin: 0;
+  overflow: hidden;
+  /* no scrollbars on page */
 }
 
-.container {
-  width: 95%;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-/* Headings */
 h1 {
   font-size: 3rem !important;
   font-weight: 800 !important;
@@ -35,26 +30,27 @@ h2 {
 }
 
 /* ----------------------------------------------------
-   MAIN 2-COLUMN LAYOUT (FULL HEIGHT)
+   MAIN 2-COLUMN LAYOUT (50% / 50%)
 ---------------------------------------------------- */
 .main-layout {
   display: flex;
   gap: 24px;
   height: calc(100vh - 200px);
-  align-items: stretch;
 }
 
-/* Left column */
+/* Left column 50% of viewport */
 .lhs {
-  flex: 1;
+  width: 47vw;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-/* Right column */
+/* Right column 50% of viewport */
 .rhs {
-  flex: 1;
+  width: 47vw;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -65,14 +61,13 @@ h2 {
 ---------------------------------------------------- */
 .input-card {
   background-color: #1f2937;
-  padding: 0;                  /* ⬅⬅⬅ REMOVED ALL INTERNAL PADDING */
+  padding: 0;
   border-radius: 8px;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  margin-bottom: 0 !important;
 }
 
 .input-label {
@@ -85,15 +80,33 @@ h2 {
 }
 
 /* ----------------------------------------------------
-   LOGSTASH EDITOR (textarea + highlight overlay)
+   LOGSTASH EDITOR + LINE NUMBERS
 ---------------------------------------------------- */
 #input-container {
   position: relative;
+  display: flex;
   flex: 1;
   min-height: 0;
   border-radius: 8px;
   overflow: hidden;
-  margin: 0 16px 0 16px; /* keep edges smooth */
+}
+
+#line-numbers {
+  width: 40px;
+  background-color: #1f2937;
+  color: #6b7280;
+  text-align: right;
+  padding: 1rem 0.5rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  white-space: pre;
+}
+
+#editor-pane {
+  flex: 1;
+  position: relative;
 }
 
 #input-container textarea {
@@ -139,7 +152,7 @@ h2 {
 }
 
 /* ----------------------------------------------------
-   BUTTON
+   RUN BUTTON
 ---------------------------------------------------- */
 .run-button-wrapper {
   margin: 1rem 0 1rem 0;
@@ -168,19 +181,21 @@ h2 {
 ---------------------------------------------------- */
 .output-grid {
   flex: 1;
-  display: flex !important;
-  flex-direction: column !important;
+  display: flex;
+  flex-direction: column;
   gap: 24px;
   min-height: 0;
 }
 
-.output-grid > .flex {
-  flex: 1;              /* Equal height: 50% / 50% */
+.output-grid>.flex {
+  flex: 1;
+  /* 50% height each for stdout/stderr */
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
+/* Output headers */
 .output-header {
   font-size: 1.25rem;
   font-weight: 600;
@@ -195,25 +210,24 @@ h2 {
   color: #f97316;
 }
 
+/* Output boxes: wrap lines like VSCode, vertical scroll if needed */
 .output-box {
-  font-family: monospace;
-  font-size: 14px;
-  padding: 0;
-  border-radius: 0.5rem;
-  overflow: auto;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  /* vertical scrollbar only */
+  overflow-x: hidden;
+  /* no horizontal scrollbar */
+  white-space: pre-wrap;
+  /* wrap lines, preserve indentation */
+  word-wrap: break-word;
   background-color: #1f2937;
   color: #f3f4f6;
   border: 1px solid #374151;
-}
-
-#stdout-container {
-  white-space: pre;
-}
-
-#stderr-container {
-  white-space: pre-wrap;
+  font-family: monospace;
+  font-size: 14px;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
 }
 
 /* ----------------------------------------------------
@@ -227,11 +241,54 @@ h2 {
 
   .lhs,
   .rhs {
+    width: 100%;
+    flex: none;
     height: auto;
-    min-height: 0;
   }
 
-  .output-grid > .flex {
+  .output-grid>.flex {
     height: 300px;
   }
 }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 8px 16px;
+  background-color: #1f2937;
+  border-radius: 8px;
+  color: #f3f4f6;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+}
+
+.toolbar-item label {
+  margin-right: 8px;
+  font-weight: 500;
+  color: #f3f4f6; /* white text */
+}
+
+.toolbar-item select,
+.toolbar-item input[type="checkbox"],
+.toolbar-item input[type="number"] {
+  cursor: pointer;
+}
+
+.toolbar-item select,
+.toolbar-item input[type="number"] {
+  background-color: #1f2937; /* dark background */
+  color: #f3f4f6;            /* white text */
+  border: 1px solid #374151;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* Optional: align checkboxes nicely */
+.toolbar-item input[type="checkbox"] {
+  margin-right: 4px;
+  width: 16px;
+  height: 16px;
+}
+

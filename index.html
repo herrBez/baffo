@@ -1,72 +1,136 @@
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baffo</title>
-    
-    <!-- Link to the separate custom stylesheet -->
-    <link rel="stylesheet" href="style.css"> 
+<!DOCTYPE html>
+<html lang="en">
 
-    <!-- Highlight.js CSS for Ruby Syntax Highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
-    
-    <!-- Load Tailwind CSS for utility classes -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-  </head>
-  <body class="font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baffo</title>
 
-    <div class="container">
-      <h1>Baffo</h1>
-      <h2>Transpile Logstash Pipelines to Elasticsearch Ingest Pipelines</h2>
+  <!-- Link to the separate custom stylesheet -->
+  <link rel="stylesheet" href="style.css">
 
-<div class="main-layout">
+  <!-- Highlight.js CSS for Ruby Syntax Highlighting -->
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
 
-  <div class="lhs">
-    <h2 class="output-header stdout-header">Logstash Pipeline</h2>
+  <!-- Load Tailwind CSS for utility classes -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <div class="input-card">
-      <div id="input-container">
-        <!-- Textarea where user types -->
-        <textarea id="code-input" rows="10" spellcheck="false"
-                  oninput="updateHighlight()" 
-                  onscroll="syncScroll(this, 'highlighted-code')"></textarea>
+</head>
 
-        <!-- Pre block for highlighting -->
-        <div id="highlighted-code">
-          <pre><code></code></pre>
+<body class="font-sans">
+
+  <div class="container">
+    <h1>Baffo</h1>
+    <h2>Transpile Logstash Pipelines to Elasticsearch Ingest Pipelines</h2>
+
+    <div class="toolbar">
+
+
+      <div class="toolbar-item">
+        <label
+          title="if enabled, we try to compute if-else conditions upfront to guarantee semantic equivalence (not idiomatic)">
+          <input type="checkbox" id="opt-fidelity">
+          Fidelity Mode
+        </label>
+      </div>
+
+      <div class="toolbar-item">
+        <label title="if enabled, we deal with errors locally like Logstash (add_tag_on_failure)">
+          <input type="checkbox" id="opt-deal-with-error-locally">
+          Deal With Errors Locally
+        </label>
+      </div>
+
+      <div class="toolbar-item">
+        <label title="if enabled, we add a default global on_failure to the main pipeline">
+          <input type="checkbox" id="opt-default-global-on-failure" checked>
+          Add Default Global On Failure
+        </label>
+      </div>
+
+
+      <div class="toolbar-item">
+        <label title="if enabled, we add a cleanup processor to the pipeline (remove @metadata and temporary fields)">
+          <input type="checkbox" id="opt-add-cleanup-processor" checked>
+          Add Cleanup Processor
+        </label>
+      </div>
+
+      <div class="toolbar-item">
+        <label for="opt-pipeline-threshold"
+          title=" determine how many processors will cause the creation of a new pipeline in conditions">Pipeline
+          Threshold</label>
+        <!-- <input type="number" id="opt-pipeline-threshold" value="4" min="1"> -->
+        <input type="range" id="opt-pipeline-threshold" name="opt-pipeline-threshold" min="1" max="10" value="4"
+          onchange="updateTextInput(this.value);">
+        <span id="textInput">4</span>
+
+      </div>
+
+
+      <div class="toolbar-item">
+        <label for="opt-log-level">Log Level:</label>
+        <select id="opt-log-level">
+          <option value="debug">Debug</option>
+          <option value="info" selected="selected">Info</option>
+          <option value="warning">Warning</option>
+          <option value="error">Error</option>
+        </select>
+      </div>
+    </div>
+
+
+
+
+    <div class="main-layout">
+
+      <div class="lhs">
+        <h2 class="output-header stdout-header">Logstash Pipeline</h2>
+
+        <div class="input-card">
+          <div id="input-container">
+            <!-- Textarea where user types -->
+            <textarea id="code-input" rows="10" spellcheck="false" oninput="updateHighlight()"
+              onscroll="syncScroll(this, 'highlighted-code')"></textarea>
+
+            <!-- Pre block for highlighting -->
+            <div id="highlighted-code">
+              <pre><code></code></pre>
+            </div>
+          </div>
+
+          <div class="run-button-wrapper">
+            <button onclick="run()" class="run-button">Transpile!</button>
+          </div>
         </div>
       </div>
 
-      <div class="run-button-wrapper">
-        <button onclick="run()" class="run-button">Transpile!</button>
-      </div>
-    </div>
-  </div>
+      <div class="divider"></div>
 
-  <div class="rhs">
-    <div class="output-grid">
 
-      <div class="flex flex-col">
-        <h2 class="output-header stdout-header">Standard Output (stdout) - JSON Formatted</h2>
-        <pre id="stdout-container" class="output-box">
+      <div class="rhs">
+        <div class="output-grid">
+
+          <div class="flex flex-col">
+            <h2 class="output-header stdout-header">Standard Output (stdout) - JSON Formatted</h2>
+            <pre id="stdout-container" class="output-box">
           <code id="stdout-code" class="language-json">No program executed yet.</code>
         </pre>
-      </div>
+          </div>
 
-      <div class="flex flex-col">
-        <h2 class="output-header stderr-header">Standard Error (stderr) - JSON Log Lines</h2>
-        <pre id="stderr-container" class="output-box">
+          <div class="flex flex-col">
+            <h2 class="output-header stderr-header">Standard Error (stderr) - JSON Log Lines</h2>
+            <pre id="stderr-container" class="output-box">
           <code id="stderr-code" class="language-json">No program executed yet.</code>
         </pre>
+          </div>
+
+        </div>
       </div>
 
     </div>
-  </div>
-  
-</div>
-    
+
 
     <!-- WASM Runner -->
     <script src="wasm_exec.js"></script>
@@ -77,127 +141,127 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
     <!-- ACTION: Added Properties language support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/properties.min.js"></script>
-    
+
     <script>
       let go = new Go();
-      
+
       // Updated element references to target the inner CODE elements
       const stdoutCodeElement = document.getElementById("stdout-code");
       const stderrCodeElement = document.getElementById("stderr-code");
-      
+
       const inputElement = document.getElementById("code-input");
       const codeElement = document.querySelector('#highlighted-code code');
-      
+
       // Store original console functions globally
       const originalConsoleLog = console.log;
       const originalConsoleError = console.error;
-      
+
       // Buffers to collect the entire output stream during execution
       let stdoutBuffer = "";
-      let stderrBuffer = ""; 
+      let stderrBuffer = "";
 
       // --- Highlight.js Setup ---
 
       function updateHighlight() {
-          const content = inputElement.value;
-          
-          // ACTION: Use highlightAuto restricted to 'ruby' and 'properties'
-          // This automatically detects the language and returns the highlighted HTML
-          if (content.trim()) {
-              const result = hljs.highlightAuto(content, ['properties']);
-              codeElement.innerHTML = result.value;
-              // Apply the detected language class for specific styling
-              codeElement.className = `hljs language-${result.language}`;
-          } else {
-              codeElement.innerHTML = '';
-              codeElement.className = '';
-          }
+        const content = inputElement.value;
 
-          syncScroll(inputElement, 'highlighted-code');
+        // ACTION: Use highlightAuto restricted to 'ruby' and 'properties'
+        // This automatically detects the language and returns the highlighted HTML
+        if (content.trim()) {
+          const result = hljs.highlightAuto(content, ['properties']);
+          codeElement.innerHTML = result.value;
+          // Apply the detected language class for specific styling
+          codeElement.className = `hljs language-${result.language}`;
+        } else {
+          codeElement.innerHTML = '';
+          codeElement.className = '';
+        }
+
+        syncScroll(inputElement, 'highlighted-code');
       }
 
       function syncScroll(source, targetId) {
-          const target = document.getElementById(targetId);
-          target.scrollTop = source.scrollTop;
+        const target = document.getElementById(targetId);
+        target.scrollTop = source.scrollTop;
       }
 
       // --- I/O CAPTURE AND REDIRECTION ---
 
       function captureConsole(isEnabled) {
-          if (isEnabled) {
-              stdoutBuffer = "";
-              stderrBuffer = ""; 
+        if (isEnabled) {
+          stdoutBuffer = "";
+          stderrBuffer = "";
 
-              console.log = function(...args) {
-                  const message = args.join(' ') + '\n';
-                  stdoutBuffer += message; 
-              };
-              
-              console.error = function(...args) {
-                  const message = args.join(' ') + '\n';
-                  stderrBuffer += message; 
-              };
+          console.log = function (...args) {
+            const message = args.join(' ') + '\n';
+            stdoutBuffer += message;
+          };
 
-          } else {
-              console.log = originalConsoleLog;
-              console.error = originalConsoleError;
-          }
+          console.error = function (...args) {
+            const message = args.join(' ') + '\n';
+            stderrBuffer += message;
+          };
+
+        } else {
+          console.log = originalConsoleLog;
+          console.error = originalConsoleError;
+        }
       }
 
       function filterAndSeparateStreams(stdoutInput, stderrInput) {
-          const stdoutLines = stdoutInput.split('\n').filter(line => line.trim() !== '');
-          let finalStdoutLines = [];
-          let finalStderrLines = [...stderrInput.split('\n').filter(line => line.trim() !== '')]; 
+        const stdoutLines = stdoutInput.split('\n').filter(line => line.trim() !== '');
+        let finalStdoutLines = [];
+        let finalStderrLines = [...stderrInput.split('\n').filter(line => line.trim() !== '')];
 
-          for (const line of stdoutLines) {
-              try {
-                  const json = JSON.parse(line);
-                  if (json["log.level"]) {
-                      finalStderrLines.push(line);
-                  } else {
-                      finalStdoutLines.push(line);
-                  }
-              } catch (e) {
-                  finalStdoutLines.push(line);
-              }
+        for (const line of stdoutLines) {
+          try {
+            const json = JSON.parse(line);
+            if (json["log.level"]) {
+              finalStderrLines.push(line);
+            } else {
+              finalStdoutLines.push(line);
+            }
+          } catch (e) {
+            finalStdoutLines.push(line);
           }
-          
-          return {
-              stdout: finalStdoutLines.join('\n'), 
-              stderr: finalStderrLines.join('\n')
-          };
+        }
+
+        return {
+          stdout: finalStdoutLines.join('\n'),
+          stderr: finalStderrLines.join('\n')
+        };
       }
-      
+
       function processOutput(targetElement, buffer, formatAsJson) {
-          const trimmedBuffer = buffer.trim();
-          
-          // Reset element's Highlight.js state
-          delete targetElement.dataset.highlighted;
-          targetElement.classList.remove('hljs'); 
-          targetElement.classList.remove('language-json');
-          
-          if (trimmedBuffer === "") {
-              targetElement.textContent = `--- No output received. ---`;
-              return;
-          }
+        const trimmedBuffer = buffer.trim();
 
-          if (formatAsJson) {
-              try {
-                  const jsonObject = JSON.parse(trimmedBuffer);
-                  const formattedJson = JSON.stringify(jsonObject, null, 2);
-                  
-                  targetElement.textContent = formattedJson;
-                  targetElement.classList.add('language-json');
-                  hljs.highlightElement(targetElement);
+        // Reset element's Highlight.js state
+        delete targetElement.dataset.highlighted;
+        targetElement.classList.remove('hljs');
+        targetElement.classList.remove('language-json');
 
-              } catch (e) {
-                  targetElement.textContent = trimmedBuffer;
-                  targetElement.classList.add('language-json');
-                  hljs.highlightElement(targetElement);
-              }
-          } else {
-              targetElement.textContent = trimmedBuffer;
+        if (trimmedBuffer === "") {
+          targetElement.textContent = `--- No output received. ---`;
+          return;
+        }
+
+        if (formatAsJson) {
+          try {
+            const jsonObject = JSON.parse(trimmedBuffer);
+            const formattedJson = JSON.stringify(jsonObject, null, 2);
+
+            targetElement.textContent = formattedJson;
+            targetElement.classList.add('language-json');
+            hljs.highlightElement(targetElement);
+
+          } catch (e) {
+            targetElement.textContent = trimmedBuffer;
+            targetElement.classList.add('language-json');
+            hljs.highlightElement(targetElement);
           }
+        } else {
+          targetElement.textContent = trimmedBuffer;
+        }
       }
 
       // --- RUN FUNCTION ---
@@ -209,20 +273,21 @@
         if (go.exited) {
           go = new Go();
         }
-        
+
         go.argv = [
-            "baffo",             
-            "transpile",
-            // "--idiomatic=true",
-            "--deal_with_error_locally=false",
-            "--pipeline_threshold=10",
-            "--fidelity=false",
-            "--log_level=debug",
-            "--inline=true",     
-            inlineContent        
+          "baffo",
+          "transpile",
+          "--deal_with_error_locally=" + (document.getElementById("opt-deal-with-error-locally").checked ? "true" : "false"),
+          "--pipeline_threshold=" + document.getElementById("opt-pipeline-threshold").value,
+          "--fidelity=" + (document.getElementById("opt-fidelity").checked ? "true" : "false"),
+          "--add_default_global_on_failure=" + (document.getElementById("opt-default-global-on-failure").checked ? "true" : "false"),
+          "--add_cleanup_processor=" + (document.getElementById("opt-add-cleanup-processor").checked ? "true" : "false"),
+          "--log_level=" + document.getElementById("opt-log-level").value,
+          "--inline=true",
+          inlineContent
         ];
 
-        captureConsole(true); 
+        captureConsole(true);
 
         try {
           const result = await WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject);
@@ -233,18 +298,23 @@
         } finally {
           const separated = filterAndSeparateStreams(stdoutBuffer, stderrBuffer);
           captureConsole(false);
-          
+
           // Pass the inner CODE elements to the processor
-          processOutput(stdoutCodeElement, separated.stdout, true); 
+          processOutput(stdoutCodeElement, separated.stdout, true);
           processOutput(stderrCodeElement, separated.stderr, true);
         }
       }
-      
+
       // --- Initial Setup Execution ---
       (function initialSetup() {
-          inputElement.value = "input{\n}\n\nfilter{\n  mutate {\n    add_field => {\n      \"[test]\" => \"foo\"\n    }\n  }\n}\n\noutput{\n}";
-          updateHighlight();
+        inputElement.value = "input{\n}\n\nfilter{\n  mutate {\n    add_field => {\n      \"[test]\" => \"foo\"\n    }\n  }\n}\n\noutput{\n}";
+        updateHighlight();
       })();
+
+      function updateTextInput(val) {
+        document.getElementById('textInput').textContent = val;
+      }
     </script>
-  </body>
-  </html>
+</body>
+
+</html>
