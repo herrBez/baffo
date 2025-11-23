@@ -1,267 +1,250 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Baffo</title>
-  <link rel="stylesheet" href="style.css">
-
-  <!-- Highlight.js CSS for Ruby Syntax Highlighting -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
-  
-  <style>
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baffo</title>
     
-  </style>
-</head>
-<body class="font-sans">
+    <!-- Link to the separate custom stylesheet -->
+    <link rel="stylesheet" href="style.css"> 
 
-  <div class="container">
-    <h1>Baffo</h1>
-    <h2>Transpile Logstash Pipelines to Elasticsearch Ingest Pipelines</h2>
+    <!-- Highlight.js CSS for Ruby Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
+    
+    <!-- Load Tailwind CSS for utility classes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+  </head>
+  <body class="font-sans">
 
-    <!-- 1. Input Section -->
+    <div class="container">
+      <h1>Baffo</h1>
+      <h2>Transpile Logstash Pipelines to Elasticsearch Ingest Pipelines</h2>
+
+<div class="main-layout">
+
+  <div class="lhs">
+    <h2 class="output-header stdout-header">Logstash Pipeline</h2>
+
     <div class="input-card">
-      <label for="code-input" class="input-label">Logstash Pipeline</label>
       <div id="input-container">
-        <!-- Textarea where user types (z-index: 10) -->
-        <textarea id="code-input" rows="10" spellcheck="false" 
-                  oninput="updateHighlight()" onscroll="syncScroll(this, 'highlighted-code')"></textarea>
-        <!-- Pre block for highlighting (z-index: 5) -->
+        <!-- Textarea where user types -->
+        <textarea id="code-input" rows="10" spellcheck="false"
+                  oninput="updateHighlight()" 
+                  onscroll="syncScroll(this, 'highlighted-code')"></textarea>
+
+        <!-- Pre block for highlighting -->
         <div id="highlighted-code">
-          <pre><code class="language-ruby"></code></pre>
+          <pre><code></code></pre>
         </div>
       </div>
+
       <div class="run-button-wrapper">
-        <button onclick="run()" class="run-button">
-          Transpile!
-        </button>
-      </div>
-    </div>
-    
-    <!-- 2. Output Section -->
-    <div class="output-grid">
-      <!-- STDOUT Output (JSON Highlighted) -->
-      <div class="flex flex-col">
-        <h2 class="output-header stdout-header">Standard Output (stdout) - JSON Formatted</h2>
-        <div id="stdout-output-container" class="output-box">
-            <!-- This pre/code block will hold the highlighted JSON -->
-            <pre><code id="stdout-output" class="language-json">No program executed yet.</code></pre>
-        </div>
-      </div>
-      
-      <!-- STDERR Output (Plain Text) -->
-      <div class="flex flex-col">
-        <h2 class="output-header stderr-header">Standard Error (stderr) - Plain Text</h2>
-        <pre id="stderr-output" class="output-box">No program executed yet.</pre>
+        <button onclick="run()" class="run-button">Transpile!</button>
       </div>
     </div>
   </div>
 
-  <!-- WASM Runner -->
-  <script src="wasm_exec.js"></script>
-  <!-- Highlight.js Library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <!-- Highlight.js Language Definitions -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/ruby.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+  <div class="rhs">
+    <div class="output-grid">
+
+      <div class="flex flex-col">
+        <h2 class="output-header stdout-header">Standard Output (stdout) - JSON Formatted</h2>
+        <pre id="stdout-container" class="output-box">
+          <code id="stdout-code" class="language-json">No program executed yet.</code>
+        </pre>
+      </div>
+
+      <div class="flex flex-col">
+        <h2 class="output-header stderr-header">Standard Error (stderr) - JSON Log Lines</h2>
+        <pre id="stderr-container" class="output-box">
+          <code id="stderr-code" class="language-json">No program executed yet.</code>
+        </pre>
+      </div>
+
+    </div>
+  </div>
   
-  <script>
-    let go = new Go();
+</div>
     
-    // Updated element references for JSON highlighting
-    const stdoutContainer = document.getElementById("stdout-output-container");
-    const stdoutElement = document.getElementById("stdout-output");
-    const stderrElement = document.getElementById("stderr-output");
-    const inputElement = document.getElementById("code-input");
-    const codeElement = document.querySelector('#highlighted-code code');
+
+    <!-- WASM Runner -->
+    <script src="wasm_exec.js"></script>
+    <!-- Highlight.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- Highlight.js Language Definitions -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/ruby.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <!-- ACTION: Added Properties language support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/properties.min.js"></script>
     
-    // Store original console functions globally
-    const originalConsoleLog = console.log;
-    const originalConsoleError = console.error;
-    
-    // Buffers to collect the entire output stream during execution
-    let stdoutBuffer = "";
+    <script>
+      let go = new Go();
+      
+      // Updated element references to target the inner CODE elements
+      const stdoutCodeElement = document.getElementById("stdout-code");
+      const stderrCodeElement = document.getElementById("stderr-code");
+      
+      const inputElement = document.getElementById("code-input");
+      const codeElement = document.querySelector('#highlighted-code code');
+      
+      // Store original console functions globally
+      const originalConsoleLog = console.log;
+      const originalConsoleError = console.error;
+      
+      // Buffers to collect the entire output stream during execution
+      let stdoutBuffer = "";
+      let stderrBuffer = ""; 
 
+      // --- Highlight.js Setup ---
 
+      function updateHighlight() {
+          const content = inputElement.value;
+          
+          // ACTION: Use highlightAuto restricted to 'ruby' and 'properties'
+          // This automatically detects the language and returns the highlighted HTML
+          if (content.trim()) {
+              const result = hljs.highlightAuto(content, ['properties']);
+              codeElement.innerHTML = result.value;
+              // Apply the detected language class for specific styling
+              codeElement.className = `hljs language-${result.language}`;
+          } else {
+              codeElement.innerHTML = '';
+              codeElement.className = '';
+          }
 
-    // --- Highlight.js Setup ---
+          syncScroll(inputElement, 'highlighted-code');
+      }
 
-    function updateHighlight() {
-        const content = inputElement.value;
-        codeElement.textContent = content;
-        hljs.highlightElement(codeElement); 
-        syncScroll(inputElement, 'highlighted-code');
-    }
+      function syncScroll(source, targetId) {
+          const target = document.getElementById(targetId);
+          target.scrollTop = source.scrollTop;
+      }
 
-    function syncScroll(source, targetId) {
-        const target = document.getElementById(targetId);
-        target.scrollTop = source.scrollTop;
-    }
+      // --- I/O CAPTURE AND REDIRECTION ---
 
-    // --- I/O CAPTURE AND REDIRECTION ---
+      function captureConsole(isEnabled) {
+          if (isEnabled) {
+              stdoutBuffer = "";
+              stderrBuffer = ""; 
 
-    // Function to replace console.log/error with custom wrappers
-    function captureConsole(isEnabled) {
-        if (isEnabled) {
-            // Reset buffers
-            stdoutBuffer = "";
+              console.log = function(...args) {
+                  const message = args.join(' ') + '\n';
+                  stdoutBuffer += message; 
+              };
+              
+              console.error = function(...args) {
+                  const message = args.join(' ') + '\n';
+                  stderrBuffer += message; 
+              };
 
-            // 1. STDOUT CAPTURE (Overrides console.log, which captures fmt.Print)
-            console.log = function(...args) {
-                // We do NOT use originalConsoleLog here to prevent double logging in the browser console
-                const message = args.join(' ') + '\n';
-                stdoutBuffer += message; // Append to buffer
-            };
-        } else {
-            // Restore originals
-            console.log = originalConsoleLog;
-            console.error = originalConsoleError;
-        }
-    }
+          } else {
+              console.log = originalConsoleLog;
+              console.error = originalConsoleError;
+          }
+      }
 
-    /**
-     * Filters the raw merged output buffer into separate STDOUT and STDERR buffers
-     * based on the presence of a 'level' field in the JSON object (indicating a log).
-     * @param {string} rawOutput The entire merged string output.
-     * @returns {{stdout: string, stderr: string}} Separated buffers.
-     */
-    function filterAndSeparateStreams(rawOutput) {
-        const lines = rawOutput.split('\n').filter(line => line.trim() !== '');
-        let stdoutLines = [];
-        let stderrLines = [];
+      function filterAndSeparateStreams(stdoutInput, stderrInput) {
+          const stdoutLines = stdoutInput.split('\n').filter(line => line.trim() !== '');
+          let finalStdoutLines = [];
+          let finalStderrLines = [...stderrInput.split('\n').filter(line => line.trim() !== '')]; 
 
-        for (const line of lines) {
-            try {
-                const json = JSON.parse(line);
-                // Check for the 'level' field (e.g., used by zerolog or other loggers)
-                if (json["log.level"]) {
-                    stderrLines.push(line);
-                } else {
-                    // Assume it's the final output pipeline JSON
-                    stdoutLines.push(line);
-                }
-            } catch (e) {
-                // If a line is not valid JSON, treat it as an error/unexpected output
-                // and put it into stderr for developer attention.
-                stderrLines.push(`[Non-JSON Output] ${line}`);
-            }
-        }
-        
-        // For the transpiler, stdout is usually one large JSON object, so we merge lines 
-        // back into a single string. Log entries (stderr) are kept separated by newline.
-        return {
-            stdout: stdoutLines.join('\n'), 
-            stderr: stderrLines.join('\n')
-        };
-    }
-    
-    /**
-     * Attempts to parse and pretty-print the output buffer as JSON, then highlights it.
-     * Falls back to plain text if parsing fails.
-     * @param {HTMLElement} targetElement The <code> element within the pre block.
-     * @param {string} buffer The raw string output captured from the stream.
-     * @param {boolean} formatAsJson Whether to attempt JSON formatting.
-     */
-    function processOutput(targetElement, buffer, formatAsJson) {
-        const trimmedBuffer = buffer.trim();
-        // --- FIX: Remove Highlight.js state explicitly ---
-        delete targetElement.dataset.highlighted;
-        // Reset element's Highlight.js state
-        targetElement.classList.remove('hljs'); 
-        targetElement.classList.remove('language-json');
-        
-        // If the buffer is empty, show a default message
-        if (trimmedBuffer === "") {
-            targetElement.textContent = `--- No output received. ---`;
-            return;
-        }
-
-        if (formatAsJson) {
-            try {
-                // Attempt to parse and pretty-print
-                const jsonObject = JSON.parse(trimmedBuffer);
-                const formattedJson = JSON.stringify(jsonObject, null, 2);
-                
-                // FIX: Clear previous highlighting state by clearing innerHTML
-                targetElement.innerHTML = ''; 
-                
-                targetElement.textContent = formattedJson;
-
-                // Apply JSON highlighting
-                targetElement.classList.add('language-json');
-                hljs.highlightElement(targetElement);
-
-            } catch (e) {
-                // If parsing fails, treat it as plain text and show a warning
-                // FIX: Ensure innerHTML is cleared here too, in case of partial JSON failure
-                targetElement.innerHTML = '';
-                targetElement.textContent = `// WARNING: Output is not valid JSON. Displaying as plain text.\n` + trimmedBuffer;
-            }
-        } else {
-            // Plain text display for stderr
-            // FIX: Ensure innerHTML is cleared here too
-            targetElement.innerHTML = ''; 
-            targetElement.textContent = trimmedBuffer;
-        }
-    }
-
-    // --- RUN FUNCTION ---
-    async function run() {
-      // 1. Prepare input and clear output elements with a running status
-      const inlineContent = inputElement.value;
-      stdoutElement.textContent = 'Running program... capturing output buffer.';
-      stderrElement.textContent = 'Running program... capturing error buffer.';
-
-      // Reset the Go instance (important for subsequent runs)
-      if (go.exited) {
-        go = new Go();
+          for (const line of stdoutLines) {
+              try {
+                  const json = JSON.parse(line);
+                  if (json["log.level"]) {
+                      finalStderrLines.push(line);
+                  } else {
+                      finalStdoutLines.push(line);
+                  }
+              } catch (e) {
+                  finalStdoutLines.push(line);
+              }
+          }
+          
+          return {
+              stdout: finalStdoutLines.join('\n'), 
+              stderr: finalStderrLines.join('\n')
+          };
       }
       
-      // Set CLI arguments
-      go.argv = [
-          "baffo",             
-          "transpile",
-          "--idiomatic=true",
-          "--log_level=debug",
-          "--inline=true",     
-          inlineContent        
-      ];
+      function processOutput(targetElement, buffer, formatAsJson) {
+          const trimmedBuffer = buffer.trim();
+          
+          // Reset element's Highlight.js state
+          delete targetElement.dataset.highlighted;
+          targetElement.classList.remove('hljs'); 
+          targetElement.classList.remove('language-json');
+          
+          if (trimmedBuffer === "") {
+              targetElement.textContent = `--- No output received. ---`;
+              return;
+          }
 
-      captureConsole(true); 
+          if (formatAsJson) {
+              try {
+                  const jsonObject = JSON.parse(trimmedBuffer);
+                  const formattedJson = JSON.stringify(jsonObject, null, 2);
+                  
+                  targetElement.textContent = formattedJson;
+                  targetElement.classList.add('language-json');
+                  hljs.highlightElement(targetElement);
 
-      try {
-        // 2. Run the WASM module
-        const result = await WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject);
-        await go.run(result.instance);
-      } catch (e) {
-        // Handle fatal runtime errors (e.g., os.Exit, memory crash)
-        originalConsoleError("WASM Execution Error (Fatal):", e);
-        // Ensure the fatal error is captured in the stderr buffer
-        stderrBuffer += `\n--- WASM RUNTIME ERROR (Fatal Crash) ---\n${e.message}\n`;
-      } finally {
-        // 3. Process output and restore console functions
-
-        const separated = filterAndSeparateStreams(stdoutBuffer);
-        captureConsole(false);
-        
-        // STDOUT: Attempt JSON formatting and highlighting
-        processOutput(stdoutElement, separated.stdout, true); 
-
-        
-        // STDERR: Display as plain text
-        processOutput(stderrElement, separated.stderr, false);
+              } catch (e) {
+                  targetElement.textContent = trimmedBuffer;
+                  targetElement.classList.add('language-json');
+                  hljs.highlightElement(targetElement);
+              }
+          } else {
+              targetElement.textContent = trimmedBuffer;
+          }
       }
-    }
-    
-    // --- Initial Setup Execution (Fixes the persistence issue) ---
-    // Run this logic immediately after the script block is parsed to ensure highlighting works
-    // even after the HTML immersive is regenerated.
-    (function initialSetup() {
-        // Set initial value for input
-        inputElement.value = "filter{ mutate { add_field => {\"[test]\" => \"foo\"}}}";
-        // Apply highlighting and sync scroll
-        updateHighlight();
-    })();
-  </script>
-</body>
-</html>
+
+      // --- RUN FUNCTION ---
+      async function run() {
+        const inlineContent = inputElement.value;
+        stdoutCodeElement.textContent = 'Running program... capturing output buffer.';
+        stderrCodeElement.textContent = 'Running program... capturing error buffer.';
+
+        if (go.exited) {
+          go = new Go();
+        }
+        
+        go.argv = [
+            "baffo",             
+            "transpile",
+            // "--idiomatic=true",
+            "--deal_with_error_locally=false",
+            "--pipeline_threshold=10",
+            "--fidelity=false",
+            "--log_level=debug",
+            "--inline=true",     
+            inlineContent        
+        ];
+
+        captureConsole(true); 
+
+        try {
+          const result = await WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject);
+          await go.run(result.instance);
+        } catch (e) {
+          originalConsoleError("WASM Execution Error (Fatal):", e);
+          stderrBuffer += `\n--- WASM RUNTIME ERROR (Fatal Crash) ---\n${e.message}\n`;
+        } finally {
+          const separated = filterAndSeparateStreams(stdoutBuffer, stderrBuffer);
+          captureConsole(false);
+          
+          // Pass the inner CODE elements to the processor
+          processOutput(stdoutCodeElement, separated.stdout, true); 
+          processOutput(stderrCodeElement, separated.stderr, true);
+        }
+      }
+      
+      // --- Initial Setup Execution ---
+      (function initialSetup() {
+          inputElement.value = "input{\n}\n\nfilter{\n  mutate {\n    add_field => {\n      \"[test]\" => \"foo\"\n    }\n  }\n}\n\noutput{\n}";
+          updateHighlight();
+      })();
+    </script>
+  </body>
+  </html>

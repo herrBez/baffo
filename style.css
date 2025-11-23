@@ -1,59 +1,101 @@
-/* Global Styles */
+/* ----------------------------------------------------
+   GLOBAL STYLES
+---------------------------------------------------- */
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #111827; /* Dark Gray / Near Black */
-  color: #f3f4f6; /* Light Gray / Off-White */
+  background-color: #111827;
+  color: #f3f4f6;
   padding: 24px;
   min-height: 100vh;
   margin: 0;
 }
 
-/* Main Container */
 .container {
-  /* --- CHANGE: Use 95% of the screen width for a broader layout --- */
-  width: 95%; 
-  /* Prevent it from getting absurdly large on giant monitors, setting a large max */
-  max-width: 1400px; 
+  width: 95%;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
-/* Heading */
+/* Headings */
 h1 {
-  font-size: 1.875rem; 
-  font-weight: bold;
-  margin-bottom: 1.5rem; 
+  font-size: 3rem !important;
+  font-weight: 800 !important;
+  margin-bottom: 1rem;
   text-align: center;
-  /* Updated Accent Color: Cyan */
-  color: #22d3ee; 
+  color: #22d3ee;
+  line-height: 1.1;
 }
+
 h2 {
-    font-size: 1.2rem;
-    font-weight: normal;
-    text-align: center;
-    color: #6b7280; /* Gray-500 */
-    margin-bottom: 1.5rem;
+  font-size: 1.5rem !important;
+  font-weight: normal;
+  text-align: center;
+  color: #9ca3af;
+  margin-bottom: 1.5rem;
 }
 
+/* ----------------------------------------------------
+   MAIN 2-COLUMN LAYOUT (FULL HEIGHT)
+---------------------------------------------------- */
+.main-layout {
+  display: flex;
+  gap: 24px;
+  height: calc(100vh - 200px);
+  align-items: stretch;
+}
 
-/* Input Card */
+/* Left column */
+.lhs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Right column */
+.rhs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ----------------------------------------------------
+   INPUT CARD (LOGSTASH EDITOR)
+---------------------------------------------------- */
 .input-card {
-  background-color: #1f2937; /* Gray-800 */
-  padding: 16px;
-  border-radius: 8px; 
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); 
-  margin-bottom: 1.5rem; 
+  background-color: #1f2937;
+  padding: 0;                  /* ⬅⬅⬅ REMOVED ALL INTERNAL PADDING */
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 0 !important;
 }
 
-/* Input Label */
 .input-label {
   display: block;
-  font-size: 1.125rem; 
-  font-weight: 500; 
-  margin-bottom: 0.5rem; 
-  color: #d1d5db; /* Gray-300 */
+  font-size: 1.125rem;
+  font-weight: 500;
+  margin: 16px;
+  margin-bottom: 8px;
+  color: #d1d5db;
 }
 
-/* --- Code Editor Layering Styles --- */
+/* ----------------------------------------------------
+   LOGSTASH EDITOR (textarea + highlight overlay)
+---------------------------------------------------- */
+#input-container {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0 16px 0 16px; /* keep edges smooth */
+}
+
 #input-container textarea {
   font-family: 'Fira Code', 'JetBrains Mono', monospace;
   font-size: 14px;
@@ -71,9 +113,7 @@ h2 {
   resize: none;
   caret-color: white;
   box-sizing: border-box;
-  
-  /* Enforce fixed width for content and enable scrolling */
-  white-space: pre; 
+  white-space: pre;
   overflow: auto;
 }
 
@@ -93,108 +133,105 @@ h2 {
   padding: 1rem;
   background-color: #1f2937 !important;
   height: 100%;
-  /* Mirror textarea scroll settings */
-  white-space: pre; 
-  word-wrap: normal;
-  overflow: hidden; 
-  
+  white-space: pre;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
-#input-container {
-  position: relative;
-  /* --- CHANGE: Fixed height for the input area --- */
-  height: 250px; 
-  border-radius: 8px;
-  overflow: hidden;
-}
-/* --- End Code Editor Layering Styles --- */
-
-/* Run Button */
+/* ----------------------------------------------------
+   BUTTON
+---------------------------------------------------- */
 .run-button-wrapper {
-  margin-top: 1rem; 
+  margin: 1rem 0 1rem 0;
   display: flex;
   justify-content: center;
 }
+
 .run-button {
-  /* Updated Accent Color: Cyan-600 */
-  background-color: #06b6d4; 
+  background-color: #06b6d4;
   color: white;
-  font-weight: 600; 
-  padding: 8px 24px; 
-  border-radius: 8px; 
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+  font-weight: 600;
+  padding: 8px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   transition: background-color 150ms ease-in-out;
   border: none;
   cursor: pointer;
 }
+
 .run-button:hover {
-  /* Updated Accent Color: Cyan-500 */
-  background-color: #22d3ee; 
+  background-color: #22d3ee;
 }
 
-/* Output Grid - Ensures both output boxes take up 50% width on larger screens */
+/* ----------------------------------------------------
+   OUTPUT SECTION (RHS)
+---------------------------------------------------- */
 .output-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px; 
-  margin-top: 24px; 
-}
-@media (min-width: 768px) { 
-  .output-grid {
-    /* 1fr 1fr guarantees 50% for STDOUT and 50% for STDERR */
-    grid-template-columns: 1fr 1fr; 
-  }
+  flex: 1;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 24px;
+  min-height: 0;
 }
 
-/* Output Headers */
+.output-grid > .flex {
+  flex: 1;              /* Equal height: 50% / 50% */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .output-header {
-  font-size: 1.25rem; 
-  font-weight: 600; 
-  margin-bottom: 0.5rem; 
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
 }
 
-/* Output Console Styles */
+.stdout-header {
+  color: #22d3ee;
+}
+
+.stderr-header {
+  color: #f97316;
+}
+
 .output-box {
   font-family: monospace;
-  padding: 1rem;
+  font-size: 14px;
+  padding: 0;
   border-radius: 0.5rem;
-  overflow: auto; 
-  /* --- CHANGE: Force horizontal scroll for all output boxes --- */
-  white-space: pre; 
-  min-height: 150px;
-  flex-grow: 1;
-  display: block;
-  /* Default dark background for all output boxes */
-  background-color: #1f2937; 
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  background-color: #1f2937;
   color: #f3f4f6;
-  border: 1px solid #374151; /* Subtle border */
+  border: 1px solid #374151;
 }
 
-/* STDOUT Styles */
-#stdout-output-container {
-  position: relative; 
-  min-height: 150px;
-}
-#stdout-output-container pre {
-    margin: 0;
-    padding: 1rem;
-    background-color: #1f2937 !important; 
-    color: #f3f4f6;
-    border-radius: 0.5rem;
-    /* --- CHANGE: Force horizontal scroll for JSON output --- */
-    white-space: pre; 
-}
-.stdout-header { 
-    /* Primary Accent Color for STDOUT Header */
-    color: #22d3ee; 
+#stdout-container {
+  white-space: pre;
 }
 
-/* STDERR Styles */
-#stderr-output {
-  /* Retains dark background, but keeps error text */
+#stderr-container {
+  white-space: pre-wrap;
 }
-.stderr-header { 
-    /* Warning/Error Accent Color: Orange */
-    color: #f97316; 
+
+/* ----------------------------------------------------
+   RESPONSIVE LAYOUT
+---------------------------------------------------- */
+@media (max-width: 768px) {
+  .main-layout {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .lhs,
+  .rhs {
+    height: auto;
+    min-height: 0;
+  }
+
+  .output-grid > .flex {
+    height: 300px;
+  }
 }
