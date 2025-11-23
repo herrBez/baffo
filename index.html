@@ -72,6 +72,9 @@
             <option value="error">Error</option>
           </select>
         </div>
+        <div class="run-button-wrapper">
+            <button onclick="run()" class="run-button">Transpile!</button>
+        </div>
       </div>
     </div>
 
@@ -242,16 +245,15 @@ function updateHighlight() {
 
             try {
                 const json = JSON.parse(line);
-                const msg = ("[" + json["log.level"].toUpperCase() + "] " + json.message) || line;
-                const level = (json["log.level"] || "info").toLowerCase();
-
-                // ADD LINE NUMBER TO CONTENT
-                div.textContent = `${lineNumber}.  ${msg}`; 
+                
+                const level = (json["log.level"]).toLowerCase();
+                const msg = ("[" + level.toUpperCase() + "] " + json.message) || line;
+                div.textContent = `${msg}`;
                 
                 div.classList.add(`log-level-${level}`);
             } catch (e) {
                 // Raw text fallback
-                div.textContent = `${lineNumber}.  ${line}`; 
+                div.textContent = `${line}`; 
                 div.classList.add('log-level-info');
             }
 
