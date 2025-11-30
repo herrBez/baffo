@@ -903,6 +903,7 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 			matchArray := getArrayStringAttributes(attr)
 			proc.Field = toElasticPipelineSelector(matchArray[0])
 			proc.Formats = matchArray[1:]
+			log.Warn().Msgf("Date filter match patterns %v may have different semantics in Elasticsearch Ingest Pipeline. Refer to the respective documentations: https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-date#plugins-filters-date-match and https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/mapping-date-format", proc.Formats)
 
 		default:
 			log.Warn().Msgf("Attribute '%s' is currently not supported", attr.Name())
