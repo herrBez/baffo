@@ -1,6 +1,6 @@
 # Baffo
 
-A **fork of [logstash-config](https://github.com/breml/logstash-config)** with a new `transpile` command that converts **Logstash Pipelines** into **Elasticsearch Ingest Pipeline syntax**.
+Baffo is a **fork of [logstash-config](https://github.com/breml/logstash-config)** with an added `transpile` command that converts **Logstash Pipelines** into **Elasticsearch Ingest Pipelines**.
 
 [![Test Status](https://github.com/herrBez/baffo/workflows/Test/badge.svg)](https://github.com/herrBez/baffo/actions?query=workflow%3ATest)
 [![Go Report Card](https://goreportcard.com/badge/github.com/herrBez/baffo)](https://goreportcard.com/report/github.com/herrBez/baffo)
@@ -11,32 +11,31 @@ A **fork of [logstash-config](https://github.com/breml/logstash-config)** with a
 
 ## Overview
 
-`baffo` provides a Go parser for Logstash configuration files, based on the original [Logstash Treetop grammar](https://github.com/elastic/logstash/blob/master/logstash-core/lib/logstash/config/grammar.treetop).  
-It uses [pigeon](https://github.com/mna/pigeon) to generate the parser from a PEG (Parsing Expression Grammar).
+`baffo` is a CLI tool to check, lint, format, and transpile Logstash configuration files.
+The main highlight is the transpile command, which converts Logstash pipelines into Elasticsearch ingest pipelines while preserving as much semantic equivalence as possible.
 
-This fork adds the **`transpile` command**, allowing you to convert existing Logstash pipelines into Elasticsearch ingest pipelines — no temporary files needed.
+## Getting Started
 
-> ⚠️ This package is under active development. API stability is **not guaranteed**.
+You can try out the tool online at https://herrbez.github.io/baffo/. Simply paste your Logstash pipeline and
+see the conversion in action.
 
----
+For more advanced usage—such as converting multiple pipelines or integrating into your workflow—install baffo locally.
 
-## Install
+
+## Installation
 
 ```bash
 go install github.com/herrBez/baffo/cmd/baffo@latest
 ```
 
 
-## Name overview
+## Name
 
-The word `baffo` means `moustache` in Italian, chosen to clearly indicate that this project is a fork of the original Mustache. The original name is inspired by the original Logstash Logo ([wooden character with an eye-catching mustache](https://www.elastic.co/de/blog/high-level-logstash-roadmap-is-published)).
+The word `baffo` means `mustache` in Italian, chosen to clearly indicate that this project is a fork of the original Mustache. The original name is inspired by the original Logstash Logo ([wooden character with an eye-catching mustache](https://www.elastic.co/de/blog/high-level-logstash-roadmap-is-published)).
 
+## Commands
 
-### Baffo
-
-`baffo` is a CLI tool to check, lint, format, and transpile Logstash configuration files.
-
-#### Transpile
+### Transpile
 
 The `transpile` command transpiles a Logstash Pipelines to one or more Elasticsearch Ingest Pipelines:
 
@@ -137,6 +136,10 @@ Use the `--help` flag to get more information about the usage of the tool.
 The project is a fork of [Logstash Config](https://github.com/breml/logstash-config) by Lucas Bremgartner ([breml](https://github.com/breml))
 
 This fork adds transpile support for Elasticsearch ingest pipelines.
+
+## Contributing
+
+We welcome contributions of all kinds—bug reports, feature requests, documentation improvements, and code contributions! Read more in the [CONTRIBUTING.md](./CONTRIBUTING.md) file.
 
 ## License
 
