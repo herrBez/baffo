@@ -1,9 +1,11 @@
 package transpile
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -876,6 +878,27 @@ func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	return ingestProcessors, onFailureProcessors
 }
 
+func TranslatePatterns(patterns []string) ([]string, bool) {
+	translated := []string{}
+	unknownPatterns := false
+	for _, pattern := range patterns {
+		switch pattern {
+		case "ISO8601":
+			translated = append(translated, "ISO8601")
+		case "UNIX":
+			translated = append(translated, "UNIX")
+		case "UNIX_MS":
+			translated = append(translated, "UNIX_MS")
+		case "TAI64N":
+			translated = append(translated, "TAI64N")
+		default:
+			translated = append(translated, pattern)
+			unknownPatterns = true
+		}
+	}
+	return translated, unknownPatterns
+}
+
 func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
@@ -902,9 +925,12 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		case "match":
 			matchArray := getArrayStringAttributes(attr)
 			proc.Field = toElasticPipelineSelector(matchArray[0])
-			proc.Formats = matchArray[1:]
-			log.Warn().Msgf("Date filter match patterns %v may have different semantics in Elasticsearch Ingest Pipeline. Refer to the respective documentations: https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-date#plugins-filters-date-match and https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/mapping-date-format", proc.Formats)
-
+			formats := matchArray[1:]
+			translatedFormats, unknownPatterns := TranslatePatterns(formats)
+			proc.Formats = translatedFormats
+			if unknownPatterns {
+				log.Warn().Msgf("Date filter match patterns '%v' may have different semantics in Elasticsearch Ingest Pipeline. Refer to the respective documentations: https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-date#plugins-filters-date-match and https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/mapping-date-format", proc.Formats)
+			}
 		default:
 			log.Warn().Msgf("Attribute '%s' is currently not supported", attr.Name())
 
@@ -1162,6 +1188,51 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 			onFailurePorcessors = DealWithTagOnFailure(attr, id, t)
 		case "break_on_match":
 			break_on_match = getBoolValue(attr)
+		case "patterns_dir":
+			pattenrsDir := getArrayStringAttributeOrStringAttrubute(attr)
+			for _, d := range pattenrsDir {
+				files, err := os.ReadDir(d)
+				if err != nil {
+					log.Warn().Err(err).Str("dir", d).Msg("Error while reading patterns_dir")
+					continue // Use continue so one bad dir doesn't stop the whole loop
+				}
+
+				for _, file := range files {
+					if file.IsDir() {
+						continue
+					}
+
+					fullPath := filepath.Join(d, file.Name())
+					f, err := os.Open(fullPath)
+					if err != nil {
+						log.Warn().Err(err).Str("file", file.Name()).Msg("Error opening pattern file")
+						continue
+					}
+
+					scanner := bufio.NewScanner(f)
+					for scanner.Scan() {
+						line := strings.TrimSpace(scanner.Text())
+
+						// Skip empty lines or comments
+						if line == "" || strings.HasPrefix(line, "#") {
+							continue
+						}
+
+						// Split by first whitespace (handles tabs or multiple spaces)
+						parts := regexp.MustCompile(`\s+`).Split(line, 2)
+						if len(parts) < 2 {
+							log.Warn().Str("file", file.Name()).Str("line", line).Msg("Invalid pattern definition")
+							continue
+						}
+
+						if gp.PatternDefinitions == nil {
+							gp.PatternDefinitions = make(map[string]string)
+						}
+						gp.PatternDefinitions[parts[0]] = parts[1]
+					}
+					f.Close() // Don't forget to close within the loop!
+				}
+			}
 		default:
 			log.Warn().Msgf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
