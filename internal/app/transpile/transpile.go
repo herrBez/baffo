@@ -582,6 +582,31 @@ const (
 	CidrContext
 )
 
+func listUsedGrokPatterns(pattern string) []string {
+	// avoid consuming '}' in captures so multiple patterns in the same string
+	grokPartsFinder := regexp.MustCompile(`\%\{([^:}]+)(:[^}]+)?(:[^}]+)?\}`)
+
+	matches := grokPartsFinder.FindAllStringSubmatch(pattern, -1)
+
+	usedPatterns := []string{}
+
+	for _, match := range matches {
+		usedPatterns = append(usedPatterns, match[1])
+	}
+
+	return usedPatterns
+}
+
+func getAllUsedPatterns(patterns map[string]string, pattern string) []string {
+	usedPatterns := listUsedGrokPatterns(pattern)
+	for _, p := range usedPatterns {
+		if _, ok := patterns[p]; ok {
+			usedPatterns = append(usedPatterns, getAllUsedPatterns(patterns, patterns[p])...)
+		}
+	}
+	return usedPatterns
+}
+
 // Function that given an expression like "foo_%{[selector]}" returns the equivalent Elastic expression
 // "foo_{{selector}}" and boolean to indicate whether the string depends on input or not
 func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
@@ -1254,6 +1279,30 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 
 		}
 	}
+
+	usedPatterns := getAllUsedPatterns(gp.PatternDefinitions, gp.Patterns[0])
+	log.Debug().Msgf("Used patterns: %v", usedPatterns)
+
+	// Filter gp.PatternDefinitions to only keep patterns that are actually used.
+	if gp.PatternDefinitions != nil {
+		keep := make(map[string]string)
+		seen := make(map[string]struct{})
+		for _, p := range usedPatterns {
+			if _, s := seen[p]; s {
+				continue
+			}
+			seen[p] = struct{}{}
+			if val, ok := gp.PatternDefinitions[p]; ok {
+				keep[p] = val
+			}
+		}
+		if len(keep) > 0 {
+			gp.PatternDefinitions = keep
+		} else {
+			gp.PatternDefinitions = nil
+		}
+	}
+
 	// Add _grok_parse_failure
 	if len(gp.OnFailure) == 0 {
 		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_grok_parse_failure", ast.DoubleQuoted)), id, t)
