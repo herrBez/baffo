@@ -40,9 +40,10 @@ type Transpile struct {
 	fidelity                  bool
 	addCleanUpProcessor       bool
 	inline                    bool
+	patterns_dir_path         string
 }
 
-func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool, inline bool) Transpile {
+func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool, inline bool, patterns_dir_path string) Transpile {
 	return Transpile{
 		threshold:                 threshold,
 		log_level:                 level[strings.ToLower(log_level)],
@@ -51,6 +52,7 @@ func New(threshold int, log_level string, deal_with_error_locally bool, addDefau
 		fidelity:                  fidelity,
 		addCleanUpProcessor:       addCleanupProcessor,
 		inline:                    inline,
+		patterns_dir_path:         patterns_dir_path,
 	}
 }
 
@@ -1165,13 +1167,23 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		}
 		switch attr.Name() {
 		case "match":
-			helpPatterns := hashAttributeToMapArray(attr)
-			// TODO: Deal with multiple keys, currently only the last is used
-			for key := range helpPatterns {
-				gp.Field = key
-				gp.Patterns = helpPatterns[key]
-				for i := range gp.Patterns {
-					gp.Patterns[i], _ = toElasticPipelineSelectorExpression(gp.Patterns[i], GrokContext)
+			// helpPatterns := hashAttributeToMapArray(attr)
+
+			// // TODO: Deal with multiple keys, currently only the last is used
+			// for key := range helpPatterns {
+			// 	gp.Field = key
+			// 	gp.Patterns = helpPatterns[key]
+			// 	for i := range gp.Patterns {
+			// 		gp.Patterns[i], _ = toElasticPipelineSelectorExpression(gp.Patterns[i], GrokContext)
+			// 	}
+			// }
+
+			keys, patterns := getHashAttributeKeyValue(attr)
+			for i := range keys {
+				gp.Field = keys[i]
+				gp.Patterns = []string{patterns[i]}
+				for j := range gp.Patterns {
+					gp.Patterns[j], _ = toElasticPipelineSelectorExpression(gp.Patterns[j], GrokContext)
 				}
 			}
 
@@ -1189,8 +1201,12 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		case "break_on_match":
 			break_on_match = getBoolValue(attr)
 		case "patterns_dir":
-			pattenrsDir := getArrayStringAttributeOrStringAttrubute(attr)
-			for _, d := range pattenrsDir {
+			patternsDir := getArrayStringAttributeOrStringAttrubute(attr)
+			if t.patterns_dir_path != "" {
+				patternsDir = []string{t.patterns_dir_path}
+				log.Info().Msgf("Using patterns_dir path from Transpile struct: %s", patternsDir)
+			}
+			for _, d := range patternsDir {
 				files, err := os.ReadDir(d)
 				if err != nil {
 					log.Warn().Err(err).Str("dir", d).Msg("Error while reading patterns_dir")
