@@ -1192,24 +1192,28 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		}
 		switch attr.Name() {
 		case "match":
-			// helpPatterns := hashAttributeToMapArray(attr)
-
-			// // TODO: Deal with multiple keys, currently only the last is used
-			// for key := range helpPatterns {
-			// 	gp.Field = key
-			// 	gp.Patterns = helpPatterns[key]
-			// 	for i := range gp.Patterns {
-			// 		gp.Patterns[i], _ = toElasticPipelineSelectorExpression(gp.Patterns[i], GrokContext)
-			// 	}
-			// }
-
-			keys, patterns := getHashAttributeKeyValue(attr)
-			for i := range keys {
-				gp.Field = keys[i]
-				gp.Patterns = []string{patterns[i]}
-				for j := range gp.Patterns {
-					gp.Patterns[j], _ = toElasticPipelineSelectorExpression(gp.Patterns[j], GrokContext)
+			if isHash(attr) {
+				helpPatterns := hashAttributeToMapArray(attr)
+				// TODO: Deal with multiple keys, currently only the last is used
+				for key := range helpPatterns {
+					gp.Field = key
+					gp.Patterns = helpPatterns[key]
+					for i := range gp.Patterns {
+						gp.Patterns[i], _ = toElasticPipelineSelectorExpression(gp.Patterns[i], GrokContext)
+					}
 				}
+			} else if isList(attr) {
+				// Note that this use-case should be less common given that it's not documented but it works
+				keys, patterns := getHashAttributeKeyValue(attr)
+				for i := range keys {
+					gp.Field = keys[i]
+					gp.Patterns = []string{patterns[i]}
+					for j := range gp.Patterns {
+						gp.Patterns[j], _ = toElasticPipelineSelectorExpression(gp.Patterns[j], GrokContext)
+					}
+				}
+			} else {
+				log.Panic().Msgf("Unexpected format for match attribute in Grok plugin: %s", attr)
 			}
 
 		case "ecs_compatibility":
