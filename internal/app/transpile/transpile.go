@@ -1,9 +1,11 @@
 package transpile
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -38,9 +40,10 @@ type Transpile struct {
 	fidelity                  bool
 	addCleanUpProcessor       bool
 	inline                    bool
+	patterns_dir_path         string
 }
 
-func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool, inline bool) Transpile {
+func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool, inline bool, patterns_dir_path string) Transpile {
 	return Transpile{
 		threshold:                 threshold,
 		log_level:                 level[strings.ToLower(log_level)],
@@ -49,6 +52,7 @@ func New(threshold int, log_level string, deal_with_error_locally bool, addDefau
 		fidelity:                  fidelity,
 		addCleanUpProcessor:       addCleanupProcessor,
 		inline:                    inline,
+		patterns_dir_path:         patterns_dir_path,
 	}
 }
 
@@ -578,6 +582,31 @@ const (
 	CidrContext
 )
 
+func listUsedGrokPatterns(pattern string) []string {
+	// avoid consuming '}' in captures so multiple patterns in the same string
+	grokPartsFinder := regexp.MustCompile(`\%\{([^:}]+)(:[^}]+)?(:[^}]+)?\}`)
+
+	matches := grokPartsFinder.FindAllStringSubmatch(pattern, -1)
+
+	usedPatterns := []string{}
+
+	for _, match := range matches {
+		usedPatterns = append(usedPatterns, match[1])
+	}
+
+	return usedPatterns
+}
+
+func getAllUsedPatterns(patterns map[string]string, pattern string) []string {
+	usedPatterns := listUsedGrokPatterns(pattern)
+	for _, p := range usedPatterns {
+		if _, ok := patterns[p]; ok {
+			usedPatterns = append(usedPatterns, getAllUsedPatterns(patterns, patterns[p])...)
+		}
+	}
+	return usedPatterns
+}
+
 // Function that given an expression like "foo_%{[selector]}" returns the equivalent Elastic expression
 // "foo_{{selector}}" and boolean to indicate whether the string depends on input or not
 func toElasticPipelineSelectorExpression(s string, context int) (string, bool) {
@@ -876,6 +905,27 @@ func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	return ingestProcessors, onFailureProcessors
 }
 
+func TranslatePatterns(patterns []string) ([]string, bool) {
+	translated := []string{}
+	unknownPatterns := false
+	for _, pattern := range patterns {
+		switch pattern {
+		case "ISO8601":
+			translated = append(translated, "ISO8601")
+		case "UNIX":
+			translated = append(translated, "UNIX")
+		case "UNIX_MS":
+			translated = append(translated, "UNIX_MS")
+		case "TAI64N":
+			translated = append(translated, "TAI64N")
+		default:
+			translated = append(translated, pattern)
+			unknownPatterns = true
+		}
+	}
+	return translated, unknownPatterns
+}
+
 func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
@@ -902,9 +952,12 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		case "match":
 			matchArray := getArrayStringAttributes(attr)
 			proc.Field = toElasticPipelineSelector(matchArray[0])
-			proc.Formats = matchArray[1:]
-			log.Warn().Msgf("Date filter match patterns %v may have different semantics in Elasticsearch Ingest Pipeline. Refer to the respective documentations: https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-date#plugins-filters-date-match and https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/mapping-date-format", proc.Formats)
-
+			formats := matchArray[1:]
+			translatedFormats, unknownPatterns := TranslatePatterns(formats)
+			proc.Formats = translatedFormats
+			if unknownPatterns {
+				log.Warn().Msgf("Date filter match patterns '%v' may have different semantics in Elasticsearch Ingest Pipeline. Refer to the respective documentations: https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-date#plugins-filters-date-match and https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/mapping-date-format", proc.Formats)
+			}
 		default:
 			log.Warn().Msgf("Attribute '%s' is currently not supported", attr.Name())
 
@@ -1139,14 +1192,28 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		}
 		switch attr.Name() {
 		case "match":
-			helpPatterns := hashAttributeToMapArray(attr)
-			// TODO: Deal with multiple keys, currently only the last is used
-			for key := range helpPatterns {
-				gp.Field = key
-				gp.Patterns = helpPatterns[key]
-				for i := range gp.Patterns {
-					gp.Patterns[i], _ = toElasticPipelineSelectorExpression(gp.Patterns[i], GrokContext)
+			if isHash(attr) {
+				helpPatterns := hashAttributeToMapArray(attr)
+				// TODO: Deal with multiple keys, currently only the last is used
+				for key := range helpPatterns {
+					gp.Field = key
+					gp.Patterns = helpPatterns[key]
+					for i := range gp.Patterns {
+						gp.Patterns[i], _ = toElasticPipelineSelectorExpression(gp.Patterns[i], GrokContext)
+					}
 				}
+			} else if isList(attr) {
+				// Note that this use-case should be less common given that it's not documented but it works
+				keys, patterns := getHashAttributeKeyValue(attr)
+				for i := range keys {
+					gp.Field = keys[i]
+					gp.Patterns = []string{patterns[i]}
+					for j := range gp.Patterns {
+						gp.Patterns[j], _ = toElasticPipelineSelectorExpression(gp.Patterns[j], GrokContext)
+					}
+				}
+			} else {
+				log.Panic().Msgf("Unexpected format for match attribute in Grok plugin: %s", attr)
 			}
 
 		case "ecs_compatibility":
@@ -1162,11 +1229,84 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 			onFailurePorcessors = DealWithTagOnFailure(attr, id, t)
 		case "break_on_match":
 			break_on_match = getBoolValue(attr)
+		case "patterns_dir":
+			patternsDir := getArrayStringAttributeOrStringAttrubute(attr)
+			if t.patterns_dir_path != "" {
+				patternsDir = []string{t.patterns_dir_path}
+				log.Info().Msgf("Using patterns_dir path from Transpile struct: %s", patternsDir)
+			}
+			for _, d := range patternsDir {
+				files, err := os.ReadDir(d)
+				if err != nil {
+					log.Warn().Err(err).Str("dir", d).Msg("Error while reading patterns_dir")
+					continue // Use continue so one bad dir doesn't stop the whole loop
+				}
+
+				for _, file := range files {
+					if file.IsDir() {
+						continue
+					}
+
+					fullPath := filepath.Join(d, file.Name())
+					f, err := os.Open(fullPath)
+					if err != nil {
+						log.Warn().Err(err).Str("file", file.Name()).Msg("Error opening pattern file")
+						continue
+					}
+
+					scanner := bufio.NewScanner(f)
+					for scanner.Scan() {
+						line := strings.TrimSpace(scanner.Text())
+
+						// Skip empty lines or comments
+						if line == "" || strings.HasPrefix(line, "#") {
+							continue
+						}
+
+						// Split by first whitespace (handles tabs or multiple spaces)
+						parts := regexp.MustCompile(`\s+`).Split(line, 2)
+						if len(parts) < 2 {
+							log.Warn().Str("file", file.Name()).Str("line", line).Msg("Invalid pattern definition")
+							continue
+						}
+
+						if gp.PatternDefinitions == nil {
+							gp.PatternDefinitions = make(map[string]string)
+						}
+						gp.PatternDefinitions[parts[0]] = parts[1]
+					}
+					f.Close() // Don't forget to close within the loop!
+				}
+			}
 		default:
 			log.Warn().Msgf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
 
 		}
 	}
+
+	usedPatterns := getAllUsedPatterns(gp.PatternDefinitions, gp.Patterns[0])
+	log.Debug().Msgf("Used patterns: %v", usedPatterns)
+
+	// Filter gp.PatternDefinitions to only keep patterns that are actually used.
+	if gp.PatternDefinitions != nil {
+		keep := make(map[string]string)
+		seen := make(map[string]struct{})
+		for _, p := range usedPatterns {
+			if _, s := seen[p]; s {
+				continue
+			}
+			seen[p] = struct{}{}
+			if val, ok := gp.PatternDefinitions[p]; ok {
+				keep[p] = val
+			}
+		}
+		if len(keep) > 0 {
+			gp.PatternDefinitions = keep
+		} else {
+			gp.PatternDefinitions = nil
+		}
+	}
+
 	// Add _grok_parse_failure
 	if len(gp.OnFailure) == 0 {
 		onFailurePorcessors = DealWithTagOnFailure(ast.NewArrayAttribute("tag_on_failure", ast.NewStringAttribute("", "_grok_parse_failure", ast.DoubleQuoted)), id, t)

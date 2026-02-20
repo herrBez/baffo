@@ -2,6 +2,7 @@ package transpile
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	config "github.com/herrBez/baffo"
@@ -246,7 +247,8 @@ func TestToElasticPipelineSelectorExpression(t *testing.T) {
 		expectMatch bool
 	}{
 		{
-			name:        "ProcessorContext simple field",
+			name: "ProcessorContext simple field",
+
 			input:       "foo_%{[bar]}",
 			context:     ProcessorContext,
 			expected:    "foo_{{{bar}}}",
@@ -292,5 +294,51 @@ func TestToElasticPipelineSelectorExpression(t *testing.T) {
 				t.Errorf("expected match=%v, got %v", tt.expectMatch, matched)
 			}
 		})
+	}
+}
+
+func TestListUsedGrokPatterns(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"no patterns", "plain text", []string{}},
+		{"single pattern", "%{SYSLOG}", []string{"SYSLOG"}},
+		{"pattern with field", "%{WORD:field}", []string{"WORD"}},
+		{"multiple patterns", "%{WORD} %{NUM_BER}", []string{"WORD", "NUM_BER"}},
+		{"pattern with convert", "%{IP:client:class}", []string{"IP"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := listUsedGrokPatterns(tt.in)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("want %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestGetAllUsedPatterns(t *testing.T) {
+	patterns := map[string]string{
+		"A": "%{B} %{C}",
+		"B": "%{D}",
+		"C": "literal",
+		"D": "%{E}",
+		"E": "",
+	}
+
+	got := getAllUsedPatterns(patterns, "%{A}")
+	want := []string{"A", "B", "C", "D", "E"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+
+	// when patterns map is empty we still return top-level used names
+	got2 := getAllUsedPatterns(map[string]string{}, "%{X} %{Y}")
+	want2 := []string{"X", "Y"}
+	if !reflect.DeepEqual(got2, want2) {
+		t.Fatalf("want %v, got %v", want2, got2)
 	}
 }

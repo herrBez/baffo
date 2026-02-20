@@ -35,6 +35,8 @@ func hashAttributeToMapArray(attr ast.Attribute) map[string][]string {
 
 			m[keyString] = values
 		}
+	default: // Unexpected Case --> PANIC
+		log.Panic().Msgf("Unexpected Case %s", attr.String())
 	}
 	return m
 }
@@ -208,4 +210,22 @@ func hashAttributeToMap(attr ast.Attribute) map[string]string {
 		}
 	}
 	return m
+}
+
+func isList(attr ast.Attribute) bool {
+	switch attr.(type) {
+	case ast.ArrayAttribute:
+		return true
+	default:
+		return false
+	}
+}
+
+func isHash(attr ast.Attribute) bool {
+	switch attr.(type) {
+	case ast.HashAttribute:
+		return true
+	default:
+		return false
+	}
 }

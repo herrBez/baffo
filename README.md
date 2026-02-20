@@ -52,6 +52,7 @@ For the transpilation we have different flags at disposal:
 - `pipeline_threshold`: determine how many processors will cause the creation of a new pipeline when converting if-else statements
 - `add_cleanup_processor`: whether we add a final remove processor to remove temporary fields created by the transpiler (and the `@metadata` field)
 - `inline`: whether the positional arguments are the script or a path to the script (default)
+- `patterns_dir_path`: override the grok patterns_dir by default is empty
 
 By default, we try to keep the semantics as close as possible with the original Logstash Pipeline. To obtain idiomatic pipelines, consider using the following settings:
 
