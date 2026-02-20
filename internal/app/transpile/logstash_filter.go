@@ -52,9 +52,9 @@ func getBoolValue(attr ast.Attribute) bool {
 	return false
 }
 
-func getHashAttributeKeyValueUntyped(attr ast.Attribute) ([]string, []interface{}) {
+func getHashAttributeKeyValueUntyped(attr ast.Attribute) ([]string, []any) {
 	var keys []string
-	var values []interface{}
+	var values []any
 	switch t := attr.(type) {
 	case ast.HashAttribute:
 		for _, entry := range t.Entries {

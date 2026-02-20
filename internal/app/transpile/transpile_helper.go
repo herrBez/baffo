@@ -94,14 +94,14 @@ func AppendIf(origIf *string, newIf *string) *string {
 	} else if newIf == nil {
 		resIf = origIf
 	} else {
-		resIf = pointer(fmt.Sprintf("(%s) && (%s)", *newIf, *origIf))
+		resIf = new(fmt.Sprintf("(%s) && (%s)", *newIf, *origIf))
 	}
 	return resIf
 }
 
 func (ingestPipeline IngestPipeline) String() string {
 
-	m := map[string]interface{}{
+	m := map[string]any{
 		"description": ingestPipeline.Description,
 		"processors":  ingestPipeline.Processors,
 	}
@@ -184,13 +184,13 @@ func (cf CommonFields) GetDescriptionOrDefault(str string) string {
 }
 
 type SetProcessor struct {
-	Value            interface{} `json:"value,omitempty"`
-	Field            string      `json:"field"`
-	CopyFrom         string      `json:"copy_from,omitempty"`
-	Override         bool        `json:"override,omitempty"`
-	IgnoreEmptyValue bool        `json:"ignore_empty_value,omitempty"`
-	MediaType        string      `json:"media_type,omitempty"`
-	IgnoreFailure    bool        `json:"ignore_failure,omitempty"`
+	Value            any    `json:"value,omitempty"`
+	Field            string `json:"field"`
+	CopyFrom         string `json:"copy_from,omitempty"`
+	Override         bool   `json:"override,omitempty"`
+	IgnoreEmptyValue bool   `json:"ignore_empty_value,omitempty"`
+	MediaType        string `json:"media_type,omitempty"`
+	IgnoreFailure    bool   `json:"ignore_failure,omitempty"`
 	CommonFields
 }
 
@@ -205,7 +205,7 @@ func (ip SetProcessor) MarshalJSON() ([]byte, error) {
 
 func StringHelper(ip IngestProcessor) string {
 
-	return ExtractString(MyJsonEncode(map[string]interface{}{
+	return ExtractString(MyJsonEncode(map[string]any{
 		ip.IngestProcessorType(): ip,
 	}))
 }
@@ -233,12 +233,12 @@ func (sp SetProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp SetProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp SetProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -273,12 +273,12 @@ func (sp RemoveProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp RemoveProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp RemoveProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -323,12 +323,12 @@ func (sp RenameProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp RenameProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp RenameProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -360,8 +360,8 @@ func (cp CaseProcessor) IngestProcessorType() string {
 	return cp.Type
 }
 
-func (sp CaseProcessor) ToOutputMap() map[string]interface{} {
-	return map[string]interface{}{}
+func (sp CaseProcessor) ToOutputMap() map[string]any {
+	return map[string]any{}
 }
 
 func (sp CaseProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
@@ -379,12 +379,12 @@ func (sp CaseProcessor) WithIf(s *string, append bool) IngestProcessor {
 }
 
 func (sp CaseProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp CaseProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -424,12 +424,12 @@ func (sp GrokProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp GrokProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp GrokProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -494,12 +494,12 @@ func (sp AppendProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp AppendProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp AppendProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -536,12 +536,12 @@ func (sp GsubProcessor) WithIf(s *string, append bool) IngestProcessor {
 }
 
 func (sp GsubProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp GsubProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -597,12 +597,12 @@ func (ip JoinProcessor) MarshalJSON() ([]byte, error) {
 }
 
 func (sp JoinProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp JoinProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -656,12 +656,12 @@ func (ip KVProcessor) MarshalJSON() ([]byte, error) {
 }
 
 func (sp KVProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp KVProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -707,12 +707,12 @@ func (ip DissectProcessor) MarshalJSON() ([]byte, error) {
 }
 
 func (sp DissectProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp DissectProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -747,12 +747,12 @@ func (sp DateProcessor) WithIf(s *string, append bool) IngestProcessor {
 }
 
 func (sp DateProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp DateProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -809,12 +809,12 @@ func (sp DropProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp DropProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp DropProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -861,12 +861,12 @@ func (ip SplitProcessor) MarshalJSON() ([]byte, error) {
 }
 
 func (sp SplitProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp SplitProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -902,12 +902,12 @@ func (sp TrimProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp TrimProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp TrimProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -951,12 +951,12 @@ func (sp PipelineProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp PipelineProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp PipelineProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -968,11 +968,11 @@ func (ip PipelineProcessor) MarshalJSON() ([]byte, error) {
 }
 
 type ScriptProcessor struct {
-	Lang          *string                 `json:"lang,omitempty"`
-	Id            *string                 `json:"id,omitempty"`
-	Source        *string                 `json:"source,omitempty"`
-	Params        *map[string]interface{} `json:"params,omitempty"`
-	IgnoreFailure bool                    `json:"ignore_failure,omitempty"`
+	Lang          *string         `json:"lang,omitempty"`
+	Id            *string         `json:"id,omitempty"`
+	Source        *string         `json:"source,omitempty"`
+	Params        *map[string]any `json:"params,omitempty"`
+	IgnoreFailure bool            `json:"ignore_failure,omitempty"`
 	CommonFields
 }
 
@@ -999,12 +999,12 @@ func (sp ScriptProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp ScriptProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp ScriptProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -1056,12 +1056,12 @@ func (sp ConvertProcessor) WithIf(s *string, append bool) IngestProcessor {
 }
 
 func (sp ConvertProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp ConvertProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -1110,12 +1110,12 @@ func (sp GeoIPProcessor) IngestProcessorType() string {
 }
 
 func (sp GeoIPProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp GeoIPProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -1172,12 +1172,12 @@ func (sp UserAgentProcessor) WithIf(s *string, append bool) IngestProcessor {
 }
 
 func (sp UserAgentProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp UserAgentProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -1227,12 +1227,12 @@ func (sp URLDecodeProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor 
 }
 
 func (sp URLDecodeProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp URLDecodeProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -1286,12 +1286,12 @@ func (sp CSVProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp CSVProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp CSVProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
 
@@ -1340,11 +1340,11 @@ func (sp JSONProcessor) WithOnFailure(s []IngestProcessor) IngestProcessor {
 }
 
 func (sp JSONProcessor) WithTag(tag string) IngestProcessor {
-	sp.Tag = pointer(tag)
+	sp.Tag = new(tag)
 	return sp
 }
 
 func (sp JSONProcessor) WithDescription(description string) IngestProcessor {
-	sp.Description = pointer(description)
+	sp.Description = new(description)
 	return sp
 }
