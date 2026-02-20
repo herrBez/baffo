@@ -2,8 +2,8 @@ package config_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 	"testing"
 
@@ -413,7 +413,7 @@ func TestParserIdenticFile(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Expected %q to parse without error: %v", test, err)
 			}
-			expected, err := ioutil.ReadFile(inputFilename)
+			expected, err := os.ReadFile(inputFilename)
 			if err != nil {
 				t.Fatalf("Unable to read file %q: %v", inputFilename, err)
 			}
@@ -686,7 +686,7 @@ func TestParserFile(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Expected %q to parse without error: %v", test, err)
 			}
-			expected, err := ioutil.ReadFile(expectedFilename)
+			expected, err := os.ReadFile(expectedFilename)
 			if err != nil {
 				t.Fatalf("Unable to read file %q: %v", expectedFilename, err)
 			}
@@ -953,7 +953,7 @@ func TestParseExceptionalComments(t *testing.T) {
 				t.Fatalf("Expected to parse to Config")
 			}
 
-			body, err := ioutil.ReadFile(inputFilename)
+			body, err := os.ReadFile(inputFilename)
 			if err != nil {
 				t.Fatalf("Unable to read file %q: %v", inputFilename, err)
 			}
@@ -984,7 +984,7 @@ func TestParseIgnoreComments(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Expected %q to parse without error: %v", test, err)
 			}
-			expected, err := ioutil.ReadFile(expectedFilename)
+			expected, err := os.ReadFile(expectedFilename)
 			if err != nil {
 				t.Fatalf("Unable to read file %q: %v", expectedFilename, err)
 			}
