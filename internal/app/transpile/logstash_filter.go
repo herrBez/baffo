@@ -43,9 +43,10 @@ func hashAttributeToMapArray(attr ast.Attribute) map[string][]string {
 
 func getBoolValue(attr ast.Attribute) bool {
 	rawString := getStringAttributeString(attr)
-	if rawString == "true" {
+	switch rawString {
+	case "true":
 		return true
-	} else if rawString == "false" {
+	case "false":
 		return false
 	}
 	log.Panic().Msg("Unexpected")
