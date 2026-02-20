@@ -12,7 +12,7 @@ This document lists the components the transpiler currently recognizes and the G
 | filter | [dissect](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-dissect) | `DealWithDissect` | ✅ |
 | filter | [drop](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-drop) | `DealWithDrop` | ✅ |
 | filter | [geoip](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-geoip) | `DealWithGeoIP` | Limited configuration options available |
-| filter | [grok](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-grok) | `DealWithGrok` | Limited configuration options available (notably no `patterns_dir`) |
+| filter | [grok](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-grok) | `DealWithGrok` | Limited configuration options available |
 | filter | [json](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-json) | `DealWithJSON` | Limited configuration options availale source and target. TODO: Add ecs_compatibility support|
 | filter | [kv](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-kv) | `DealWithKV` | Limited configuration options supported |
 | filter | [mutate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-mutate) | `DealWithMutate` | ✅ (merge not supported yet) |
