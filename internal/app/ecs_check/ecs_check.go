@@ -54,7 +54,7 @@ func (f ECSCheck) Run(args []string) error {
 			// continue
 		} else {
 			var tree ast.Config = res.(ast.Config)
-			log.Println(reflect.TypeOf(tree))
+			log.Println(reflect.TypeFor[ast.Config]())
 
 			var input_plugin_names []string = getAllPluginNames(tree.Input)
 			var filter_plugin_names []string = getAllPluginNames(tree.Filter)
