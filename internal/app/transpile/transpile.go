@@ -397,7 +397,7 @@ else {
 		keys, values := getHashAttributeKeyValue(attr)
 
 		for i := range keys {
-			if Contains([]string{"boolean", "integer_eu", "float_eu"}, values[i]) {
+			if slices.Contains([]string{"boolean", "integer_eu", "float_eu"}, values[i]) {
 				log.Warn().Msgf("Mutate Convert to type '%s' semantics may be different in Elasticsearch Convert Processor", values[i])
 			}
 			ingestProcessors = append(ingestProcessors, ConvertProcessor{
@@ -800,7 +800,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
 
 	for _, attr := range plugin.Attributes {
-		if !Contains(CommonAttributes, attr.Name()) {
+		if !slices.Contains(CommonAttributes, attr.Name()) {
 			continue // Ignore not common attributes
 		}
 		switch attr.Name() {
@@ -935,7 +935,7 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	proc := DateProcessor{}.WithTag(id).(DateProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -1189,7 +1189,7 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	gp := GrokProcessor{}.WithTag(id).(GrokProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -1329,7 +1329,7 @@ func DealWithURLDecode(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	udp := URLDecodeProcessor{}.WithTag(id).(URLDecodeProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -1600,7 +1600,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	noncommonattrs := []ast.Attribute{}
 
 	for _, pa := range plugin.Attributes {
-		if !Contains(CommonAttributes, pa.Name()) {
+		if !slices.Contains(CommonAttributes, pa.Name()) {
 			noncommonattrs = append(noncommonattrs, pa)
 		}
 	}
@@ -1637,10 +1637,6 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	return ingestProcessors
 }
 
-func Contains[T comparable](s []T, e T) bool {
-	return slices.Contains(s, e)
-}
-
 func getProcessorID(plugin ast.Plugin) string {
 	id, err := plugin.ID()
 	if err != nil {
@@ -1661,7 +1657,7 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 	}.WithTag(id).(KVProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -1705,7 +1701,7 @@ func DealWithJSON(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	json := JSONProcessor{}.WithTag(id).(JSONProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
