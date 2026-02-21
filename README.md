@@ -19,13 +19,17 @@ The main highlight is the transpile command, which converts Logstash pipelines i
 You can try out the tool online at https://herrbez.github.io/baffo/. Simply paste your Logstash pipeline and
 see the conversion in action.
 
-For more advanced usage—such as converting multiple pipelines or integrating into your workflow—install baffo locally.
+For more advanced usage—such as converting multiple pipelines or integrating into your workflow—install baffo locally or use the docker image.
 
 
 ## Installation
 
 ```bash
 go install github.com/herrBez/baffo/cmd/baffo@latest
+```
+
+```bash
+docker run briomkez/baffo:latest
 ```
 
 
@@ -67,7 +71,7 @@ baffo transpile file.conf \
 > ⚠️ Disclaimer: Semantic equivalence between the input Logstash pipelines and the generated Elasticsearch ingest pipelines is not formally guaranteed. The output should not be used in production without careful review and testing.
 
 
-If you need a quick conversion without bothering creating a file you can:
+If you need a quick conversion without bothering creating a file you can execute:
 
 ```
 baffo transpile /dev/stdin --deal_with_error_locally=false \
