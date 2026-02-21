@@ -18,6 +18,7 @@ var (
 	add_cleanup_processor         bool
 	inline                        bool
 	patterns_dir_path             string
+	translate_dir_path            string
 )
 
 func makeTranspileCmd() *cobra.Command {
@@ -66,11 +67,12 @@ func makeTranspileCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&fidelity, "fidelity", true, "try to keep correct if-else semantic")
 	cmd.Flags().BoolVar(&add_cleanup_processor, "add_cleanup_processor", true, "add a cleanup processor to remove temporary fields created by the transpiler")
 	cmd.Flags().BoolVar(&inline, "inline", false, "whether the input is provided inline or via file paths(default false)")
-	cmd.Flags().StringVar(&patterns_dir_path, "patterns_dir_path", "", "directory containing pattern files")
+	cmd.Flags().StringVar(&patterns_dir_path, "patterns_dir_path", "", "directory containing the grok pattern_dir files. May be used to overwrite filter's defintion")
+	cmd.Flags().StringVar(&patterns_dir_path, "translate_dir_path", "", "directory containing translate filter file. May be used to overwrite filter's definition.")
 	return cmd
 }
 
 func runTranspile(cmd *cobra.Command, args []string) error {
-	check := transpile.New(pipeline_threshold, log_level, deal_with_error_locally, add_default_global_on_failure, fidelity, add_cleanup_processor, inline, patterns_dir_path)
+	check := transpile.New(pipeline_threshold, log_level, deal_with_error_locally, add_default_global_on_failure, fidelity, add_cleanup_processor, inline, patterns_dir_path, translate_dir_path)
 	return check.Run(args)
 }

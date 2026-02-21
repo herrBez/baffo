@@ -2,6 +2,7 @@ package transpile
 
 import (
 	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"os"
 	"path"
@@ -13,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.elastic.co/ecszerolog"
+	"go.yaml.in/yaml/v3"
 
 	"bytes"
 	"fmt"
@@ -41,9 +43,10 @@ type Transpile struct {
 	addCleanUpProcessor       bool
 	inline                    bool
 	patterns_dir_path         string
+	translate_dir_path        string
 }
 
-func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool, inline bool, patterns_dir_path string) Transpile {
+func New(threshold int, log_level string, deal_with_error_locally bool, addDefaultGlobalOnFailure bool, fidelity bool, addCleanupProcessor bool, inline bool, patterns_dir_path string, translate_dir_path string) Transpile {
 	return Transpile{
 		threshold:                 threshold,
 		log_level:                 level[strings.ToLower(log_level)],
@@ -53,6 +56,7 @@ func New(threshold int, log_level string, deal_with_error_locally bool, addDefau
 		addCleanUpProcessor:       addCleanupProcessor,
 		inline:                    inline,
 		patterns_dir_path:         patterns_dir_path,
+		translate_dir_path:        translate_dir_path,
 	}
 }
 
@@ -1936,13 +1940,62 @@ func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, 
 	return ingestProcessors, onFailureProcessors
 }
 
+func loadDictionaryFromPath(filePath string) (map[string]string, error) {
+	dictionary := make(map[string]string)
+
+	// Verify file exists
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("stat %q: %w", filePath, err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("%q is a directory", filePath)
+	}
+
+	// Read file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("read %q: %w", filePath, err)
+	}
+
+	// Detect format by file extension
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	switch ext {
+	case ".json":
+		if err := json.Unmarshal(content, &dictionary); err != nil {
+			return nil, fmt.Errorf("invalid JSON dictionary: %w", err)
+		}
+	case ".yaml", ".yml", "":
+		if err := yaml.Unmarshal(content, &dictionary); err != nil {
+			return nil, fmt.Errorf("invalid YAML dictionary: %w", err)
+		}
+	case ".csv":
+		r := csv.NewReader(strings.NewReader(string(content)))
+		records, err := r.ReadAll()
+		if err != nil {
+			return nil, fmt.Errorf("invalid CSV dictionary: %w", err)
+		}
+		for _, row := range records {
+			if len(row) != 2 {
+				return nil, errors.New("CSV rows must have exactly 2 columns (key,value)")
+			}
+			dictionary[strings.TrimSpace(row[0])] = strings.TrimSpace(row[1])
+		}
+	default:
+		return nil, fmt.Errorf("unsupported dictionary file type: %q", ext)
+	}
+
+	return dictionary, nil
+}
+
 func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, []IngestProcessor) {
 	ingestProcessors := []IngestProcessor{}
 	onFailureProcessors := []IngestProcessor{}
 
 	proc := ScriptProcessor{}.WithTag(id).(ScriptProcessor)
 
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 
 	var target *string = nil
 	ECSCompatibility := "v8" // We assume ECS Compatibility
@@ -1964,6 +2017,22 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 				dictionary[keys[i]] = values[i]
 			}
 			params["dictionary"] = dictionary
+
+		case "dictionary_path":
+			dictionaryPath := getStringAttributeString(attr)
+
+			// Make sure the dir path can be overwritten from command line
+			if t.translate_dir_path != "" {
+				baseDictionaryFile := filepath.Base(dictionaryPath)
+				dictionaryPath = fmt.Sprintf(t.translate_dir_path, baseDictionaryFile)
+			}
+
+			dict, err := loadDictionaryFromPath(dictionaryPath)
+			if err != nil {
+				log.Warn().Msgf("Could not load DictionaryFromPath %v", err)
+			}
+
+			params["dictionary"] = dict
 
 		case "ecs_compatibility":
 			ECSCompatibility = getStringAttributeString(attr)

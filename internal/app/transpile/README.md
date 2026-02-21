@@ -19,7 +19,7 @@ This document lists the components the transpiler currently recognizes and the G
 | filter | [prune](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-prune) | `DealWithPrune` | Limited support |
 | filter | [split](http://elastic.co/docs/reference/logstash/plugins/plugins-filters-split) | `DealWithUnfeasiblePlugin` | ❌ Returns an error and return an empty processor list. There is no way to replicate the split logic |
 | filter | [syslog_pri](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-syslog_pri) | `DealWithSyslogPri` | ✅ (Converted as script) |
-| filter | [translate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-translate) | `DealWithTranslate` | ✅ (No external file dictionary available) |
+| filter | [translate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-translate) | `DealWithTranslate` | ✅ |
 | filter | [truncate](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-truncate) | `DealWithTruncate` | ❌ Commented out in source (not active) |
 | filter | [urldecode](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-urldecode) | `DealWithURLDecode` | ✅ (Charset not supported) |
 | filter | [useragent](https://www.elastic.co/docs/reference/logstash/plugins/plugins-filters-useragent) | `DealWithUserAgent` | ✅ (Caveats do apply with [ecs_compatibility: false](https://github.com/herrBez/baffo/issues/9)) |
