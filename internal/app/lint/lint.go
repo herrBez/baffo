@@ -88,14 +88,14 @@ func (l Lint) Run(args []string) error {
 			func() {
 				f, err := os.Create(filename)
 				if err != nil {
-					result = errors.Join(result, errors.Join(err, errors.New("failed to open file for writting with automatically fixed ID")))
+					result = errors.Join(result, fmt.Errorf("failed to open file for writting with automatically fixed ID: %w", err))
 					return
 				}
 				defer f.Close()
 
 				_, err = f.WriteString(conf.String())
 				if err != nil {
-					result = errors.Join(result, errors.Join(err, errors.New("failed to write file with automatically fixed ID")))
+					result = errors.Join(result, fmt.Errorf("failed to write file with automatically fixed ID: %w", err))
 					return
 				}
 			}()
