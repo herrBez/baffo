@@ -3,7 +3,6 @@ module github.com/herrBez/baffo
 go 1.26
 
 require (
-	github.com/hashicorp/go-multierror v1.1.1
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/sergi/go-diff v1.4.0
@@ -11,8 +10,6 @@ require (
 	github.com/spf13/viper v1.21.0
 	go.elastic.co/ecszerolog v0.2.0
 )
-
-require github.com/hashicorp/errwrap v1.1.0 // indirect
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect

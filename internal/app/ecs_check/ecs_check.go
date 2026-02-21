@@ -1,6 +1,7 @@
 package ecs_check
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -8,13 +9,10 @@ import (
 	// "fmt"
 	"github.com/herrBez/baffo/ast/astutil"
 
-	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
-
+	"errors"
 	"reflect"
 
 	config "github.com/herrBez/baffo"
-	"github.com/herrBez/baffo/internal/format"
 
 	ast "github.com/herrBez/baffo/ast"
 )
@@ -26,12 +24,11 @@ func New() ECSCheck {
 }
 
 func (f ECSCheck) Run(args []string) error {
-	var result *multierror.Error
-
+	var result error
 	for _, filename := range args {
 		stat, err := os.Stat(filename)
 		if err != nil {
-			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			result = errors.Join(result, fmt.Errorf("%s: %v", filename, err))
 		}
 		if stat.IsDir() {
 			continue
@@ -47,10 +44,10 @@ func (f ECSCheck) Run(args []string) error {
 
 			// if errMsg, hasErr := config.GetFarthestFailure(); hasErr {
 			// 	if !strings.Contains(err.Error(), errMsg) {
-			// 		err = errors.Errorf("%s: %v\n%s", filename, err, errMsg)
+			// 		err = fmt.Errorf("%s: %v\n%s", filename, err, errMsg)
 			// 	}
 			// }
-			// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			// result = errors.Join(result, fmt.Errorf("%s: %v", filename, err))
 			// continue
 		} else {
 			var tree ast.Config = res.(ast.Config)
@@ -69,7 +66,6 @@ func (f ECSCheck) Run(args []string) error {
 	}
 
 	if result != nil {
-		result.ErrorFormat = format.MultiErr
 		return result
 	}
 

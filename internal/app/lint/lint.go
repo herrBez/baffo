@@ -1,17 +1,14 @@
 package lint
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
-
 	config "github.com/herrBez/baffo"
 	"github.com/herrBez/baffo/ast"
 	"github.com/herrBez/baffo/ast/astutil"
-	"github.com/herrBez/baffo/internal/format"
 )
 
 type Lint struct {
@@ -25,12 +22,12 @@ func New(autoFixID bool) Lint {
 }
 
 func (l Lint) Run(args []string) error {
-	var result *multierror.Error
+	var result error
 
 	for _, filename := range args {
 		stat, err := os.Stat(filename)
 		if err != nil {
-			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			result = errors.Join(result, fmt.Errorf("%s: %v", filename, err))
 		}
 		if stat.IsDir() {
 			continue
@@ -40,15 +37,15 @@ func (l Lint) Run(args []string) error {
 		if err != nil {
 			if errMsg, hasErr := config.GetFarthestFailure(); hasErr {
 				if !strings.Contains(err.Error(), errMsg) {
-					err = errors.Errorf("%s: %v\n%s", filename, err, errMsg)
+					err = fmt.Errorf("%s: %v\n%s", filename, err, errMsg)
 				}
 			}
-			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			result = errors.Join(result, fmt.Errorf("%s: %v", filename, err))
 			continue
 		}
 		conf := c.(ast.Config)
 		for _, warning := range conf.Warnings {
-			result = multierror.Append(result, errors.New(warning))
+			result = errors.Join(result, errors.New(warning))
 		}
 
 		v := validator{
@@ -76,7 +73,7 @@ func (l Lint) Run(args []string) error {
 			for _, block := range v.noIDs {
 				errMsg.WriteString(block + "\n")
 			}
-			result = multierror.Append(result, errors.New(errMsg.String()))
+			result = errors.Join(result, errors.New(errMsg.String()))
 		}
 		if len(v.duplicateIDs) > 0 {
 			errMsg := strings.Builder{}
@@ -84,21 +81,21 @@ func (l Lint) Run(args []string) error {
 			for _, block := range v.duplicateIDs {
 				errMsg.WriteString(block + "\n")
 			}
-			result = multierror.Append(result, errors.New(errMsg.String()))
+			result = errors.Join(result, errors.New(errMsg.String()))
 		}
 
 		if l.autoFixID && v.changed {
 			func() {
 				f, err := os.Create(filename)
 				if err != nil {
-					result = multierror.Append(result, errors.Wrap(err, "failed to open file for writting with automatically fixed ID"))
+					result = errors.Join(result, errors.Join(err, errors.New("failed to open file for writting with automatically fixed ID")))
 					return
 				}
 				defer f.Close()
 
 				_, err = f.WriteString(conf.String())
 				if err != nil {
-					result = multierror.Append(result, errors.Wrap(err, "failed to write file with automatically fixed ID"))
+					result = errors.Join(result, errors.Join(err, errors.New("failed to write file with automatically fixed ID")))
 					return
 				}
 			}()
@@ -106,7 +103,6 @@ func (l Lint) Run(args []string) error {
 	}
 
 	if result != nil {
-		result.ErrorFormat = format.MultiErr
 		return result
 	}
 
@@ -131,9 +127,7 @@ func (v *validator) walk(c *astutil.Cursor) {
 			v.changed = true
 
 			plugin := c.Plugin()
-			// plugin.Attributes = append(plugin.Attributes, ast.NewStringAttribute("id", fmt.Sprintf("%s-%d", c.Plugin().Name(), v.count), ast.DoubleQuoted))
-
-			// plugin.Attributes = append(plugin.Attributes, ast.NewStringAttribute("id", fmt.Sprintf("%s", c.Plugin().Name()), ast.DoubleQuoted))
+			plugin.Attributes = append(plugin.Attributes, ast.NewStringAttribute("id", fmt.Sprintf("%s-%d", c.Plugin().Name(), v.count), ast.DoubleQuoted))
 
 			c.Replace(plugin)
 		} else {

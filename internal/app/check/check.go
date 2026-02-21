@@ -1,14 +1,13 @@
 package check
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
-	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
+	"errors"
 
 	config "github.com/herrBez/baffo"
-	"github.com/herrBez/baffo/internal/format"
 )
 
 type Check struct{}
@@ -18,12 +17,12 @@ func New() Check {
 }
 
 func (f Check) Run(args []string) error {
-	var result *multierror.Error
+	var result error
 
 	for _, filename := range args {
 		stat, err := os.Stat(filename)
 		if err != nil {
-			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			result = errors.Join(result, fmt.Errorf("%s: %v", filename, err))
 		}
 		if stat.IsDir() {
 			continue
@@ -33,16 +32,15 @@ func (f Check) Run(args []string) error {
 		if err != nil {
 			if errMsg, hasErr := config.GetFarthestFailure(); hasErr {
 				if !strings.Contains(err.Error(), errMsg) {
-					err = errors.Errorf("%s: %v\n%s", filename, err, errMsg)
+					err = fmt.Errorf("%s: %v\n%s", filename, err, errMsg)
 				}
 			}
-			result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			result = errors.Join(result, fmt.Errorf("%s: %v", filename, err))
 			continue
 		}
 	}
 
 	if result != nil {
-		result.ErrorFormat = format.MultiErr
 		return result
 	}
 

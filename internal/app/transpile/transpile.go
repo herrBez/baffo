@@ -18,13 +18,11 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
+	"errors"
 
 	"reflect"
 
 	config "github.com/herrBez/baffo"
-	"github.com/herrBez/baffo/internal/format"
 
 	ast "github.com/herrBez/baffo/ast"
 
@@ -71,7 +69,7 @@ func (t Transpile) Run(args []string) error {
 	log.Logger = logger
 	zerolog.SetGlobalLevel(t.log_level)
 
-	var result *multierror.Error
+	var result error
 	ips := []IngestPipeline{}
 
 	var res any
@@ -87,7 +85,7 @@ func (t Transpile) Run(args []string) error {
 		res, err = config.Parse(filename, content, config.IgnoreComments(true))
 		if err != nil {
 			log.Warn().Msgf("%s %s %s", err, res, reflect.TypeOf(res))
-			// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			// result = errors.Join(result, errors.Errorf("%s: %v", filename, err))
 			return err
 		} else {
 			var tree ast.Config = res.(ast.Config)
@@ -100,7 +98,7 @@ func (t Transpile) Run(args []string) error {
 		for _, filename := range args {
 			stat, err := os.Stat(filename)
 			if err != nil {
-				result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+				result = errors.Join(result, fmt.Errorf("%s: %v", filename, err))
 				continue
 			}
 			if stat.IsDir() {
@@ -109,7 +107,7 @@ func (t Transpile) Run(args []string) error {
 			res, err = config.ParseFile(filename, config.IgnoreComments(true))
 			if err != nil {
 				log.Warn().Msgf("%s %s %s", err, res, reflect.TypeOf(res))
-				// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+				// result = errors.Join(result, errors.Errorf("%s: %v", filename, err))
 				continue
 			} else {
 				var tree ast.Config = res.(ast.Config)
@@ -123,7 +121,6 @@ func (t Transpile) Run(args []string) error {
 	printPipeline(ips)
 
 	if result != nil {
-		result.ErrorFormat = format.MultiErr
 		return result
 	}
 
