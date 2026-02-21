@@ -29,7 +29,7 @@ func NewNotFoundError(err error) error {
 
 // NotFoundErrorf formats according to a format specifier and returns the string
 // as a value that satisfies NotFounder.
-func NotFoundErrorf(format string, a ...interface{}) error {
+func NotFoundErrorf(format string, a ...any) error {
 	return NewNotFoundError(fmt.Errorf(format, a...))
 }
 

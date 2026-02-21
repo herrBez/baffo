@@ -152,7 +152,7 @@ func TestToElasticPipelineSelector(t *testing.T) {
 }
 
 // Help function to guarantee that a function returning a value and an error, returns only the value
-func dealWithError(i interface{}, err error) interface{} {
+func dealWithError(i any, err error) any {
 	if err == nil {
 		return i
 	}
@@ -165,7 +165,7 @@ func dealWithError(i interface{}, err error) interface{} {
 // 2. Parse the dummy configuration
 // 3. Extract the condition
 func extractCondition(s string) ast.Condition {
-	return dealWithError(config.Parse("fake", []byte(fmt.Sprintf("filter { if %s {} }", s)))).(ast.Config).Filter[0].BranchOrPlugins[0].(ast.Branch).IfBlock.Condition
+	return dealWithError(config.Parse("fake", fmt.Appendf(nil, "filter { if %s {} }", s))).(ast.Config).Filter[0].BranchOrPlugins[0].(ast.Branch).IfBlock.Condition
 }
 
 func TestEndToEnd(t *testing.T) {

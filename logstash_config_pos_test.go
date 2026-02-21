@@ -996,7 +996,7 @@ output {
 	}
 }
 
-func T(in interface{}) string {
+func T(in any) string {
 	return fmt.Sprintf("%T", in)
 }
 

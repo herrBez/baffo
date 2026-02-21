@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,13 +18,11 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
+	"errors"
 
 	"reflect"
 
 	config "github.com/herrBez/baffo"
-	"github.com/herrBez/baffo/internal/format"
 
 	ast "github.com/herrBez/baffo/ast"
 
@@ -70,10 +69,10 @@ func (t Transpile) Run(args []string) error {
 	log.Logger = logger
 	zerolog.SetGlobalLevel(t.log_level)
 
-	var result *multierror.Error
+	var result error
 	ips := []IngestPipeline{}
 
-	var res interface{}
+	var res any
 	var err error
 
 	if t.inline {
@@ -86,7 +85,7 @@ func (t Transpile) Run(args []string) error {
 		res, err = config.Parse(filename, content, config.IgnoreComments(true))
 		if err != nil {
 			log.Warn().Msgf("%s %s %s", err, res, reflect.TypeOf(res))
-			// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+			// result = errors.Join(result, errors.Errorf("%s: %v", filename, err))
 			return err
 		} else {
 			var tree ast.Config = res.(ast.Config)
@@ -99,7 +98,7 @@ func (t Transpile) Run(args []string) error {
 		for _, filename := range args {
 			stat, err := os.Stat(filename)
 			if err != nil {
-				result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+				result = errors.Join(result, fmt.Errorf("%s: %v", filename, err))
 				continue
 			}
 			if stat.IsDir() {
@@ -108,7 +107,7 @@ func (t Transpile) Run(args []string) error {
 			res, err = config.ParseFile(filename, config.IgnoreComments(true))
 			if err != nil {
 				log.Warn().Msgf("%s %s %s", err, res, reflect.TypeOf(res))
-				// result = multierror.Append(result, errors.Errorf("%s: %v", filename, err))
+				// result = errors.Join(result, errors.Errorf("%s: %v", filename, err))
 				continue
 			} else {
 				var tree ast.Config = res.(ast.Config)
@@ -122,7 +121,6 @@ func (t Transpile) Run(args []string) error {
 	printPipeline(ips)
 
 	if result != nil {
-		result.ErrorFormat = format.MultiErr
 		return result
 	}
 
@@ -199,23 +197,24 @@ func toElasticPipelineSelectorWithNullable(sel string, nullable bool) string {
 	// if the selector contains square brackets we need to convert them
 	if sel[0] == '[' && sel[len(sel)-1] == ']' {
 		parts := strings.Split(sel[1:len(sel)-1], "][")
-		elasticSelector := "ctx"
-		currentPath := ""
+		var elasticSelector strings.Builder
+		elasticSelector.WriteString("ctx")
+		var currentPath strings.Builder
 		for _, part := range parts {
 			// e.g., field metadata
 			if strings.HasPrefix(part, "@") {
-				elasticSelector += fmt.Sprintf(".getOrDefault('%s', null)", part)
-				currentPath += fmt.Sprintf("['%s']", part)
+				elasticSelector.WriteString(fmt.Sprintf(".getOrDefault('%s', null)", part))
+				currentPath.WriteString(fmt.Sprintf("['%s']", part))
 			} else {
-				elasticSelector += "?." + part
-				currentPath += fmt.Sprintf(".%s", part)
+				elasticSelector.WriteString("?." + part)
+				currentPath.WriteString(fmt.Sprintf(".%s", part))
 			}
 		}
 
 		if nullable {
-			return elasticSelector
+			return elasticSelector.String()
 		} else {
-			return "ctx" + currentPath
+			return "ctx" + currentPath.String()
 		}
 	} else {
 		if strings.Contains(sel, "@") || strings.Contains(sel, ".") {
@@ -375,7 +374,7 @@ func DealWithMutateAttributes(attr ast.Attribute, ingestProcessors []IngestProce
 		for _, value := range values {
 			field := toElasticPipelineSelector(value)
 			ingestProcessors = append(ingestProcessors, ScriptProcessor{
-				Source: pointer(
+				Source: new(
 					fmt.Sprintf(
 						`def fieldValue = $('%s', null);
 if(fieldValue instanceof String) {
@@ -387,7 +386,7 @@ if(fieldValue instanceof String) {
 else {
   throw new Exception("Cannot capitalize something that is not a string")
 }*/`, field, field, field)),
-			}.WithIf(pointer(getIfFieldDefined(field)), false).
+			}.WithIf(new(getIfFieldDefined(field)), false).
 				WithDescription(fmt.Sprintf("Capitalize field '%s'", field)))
 		}
 
@@ -395,7 +394,7 @@ else {
 		keys, values := getHashAttributeKeyValue(attr)
 
 		for i := range keys {
-			if Contains([]string{"boolean", "integer_eu", "float_eu"}, values[i]) {
+			if slices.Contains([]string{"boolean", "integer_eu", "float_eu"}, values[i]) {
 				log.Warn().Msgf("Mutate Convert to type '%s' semantics may be different in Elasticsearch Convert Processor", values[i])
 			}
 			ingestProcessors = append(ingestProcessors, ConvertProcessor{
@@ -516,7 +515,7 @@ else {
 				SetProcessor{
 					Value: values[i],
 					Field: keys[i],
-				}.WithIf(pointer(field_is_null), true).
+				}.WithIf(new(field_is_null), true).
 					WithDescription(fmt.Sprintf("Set field '%s' to value '%s' if null", keys[i], values[i])),
 			)
 		}
@@ -798,7 +797,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 	ingestProcessors := []IngestProcessor{}
 
 	for _, attr := range plugin.Attributes {
-		if !Contains(CommonAttributes, attr.Name()) {
+		if !slices.Contains(CommonAttributes, attr.Name()) {
 			continue // Ignore not common attributes
 		}
 		switch attr.Name() {
@@ -808,7 +807,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 
 			for i := range keys {
 
-				var value interface{}
+				var value any
 
 				switch values[i].(type) {
 				case string:
@@ -847,7 +846,7 @@ func DealWithCommonAttributes(plugin ast.Plugin) []IngestProcessor {
 			for _, t := range tags {
 				ingestProcessors = append(ingestProcessors,
 					ScriptProcessor{
-						Source: pointer(
+						Source: new(
 							fmt.Sprintf(
 								`if(ctx.tags instanceof List) {
 	ctx.tags.removeIf(x -> x == '%s')
@@ -891,7 +890,7 @@ func DealWithDrop(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 				log.Info().Msgf("Percentage %d", value)
 				// TODO Add seed?
 				// TODO Make sure that random number is generated only on need
-				proc = proc.WithIf(pointer(fmt.Sprintf("new Random().nextInt(100) < %d", value)), true).(DropProcessor)
+				proc = proc.WithIf(new(fmt.Sprintf("new Random().nextInt(100) < %d", value)), true).(DropProcessor)
 			}
 		// Add if condition
 
@@ -933,7 +932,7 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	proc := DateProcessor{}.WithTag(id).(DateProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -941,13 +940,13 @@ func DealWithDate(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		case "tag_on_failure":
 			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
 		case "target":
-			proc.TargetField = pointer(getStringAttributeString(attr))
+			proc.TargetField = new(getStringAttributeString(attr))
 		case "locale":
 			log.Warn().Msgf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
-			proc.Locale = pointer(getStringAttributeString(attr))
+			proc.Locale = new(getStringAttributeString(attr))
 		case "timezone":
 			log.Warn().Msgf("Date filter is using %s %s. Please make sure it corresponds to Ingest Pipeline's one", attr.Name(), getStringAttributeString(attr))
-			proc.Timezone = pointer(getStringAttributeString(attr))
+			proc.Timezone = new(getStringAttributeString(attr))
 
 		case "match":
 			matchArray := getArrayStringAttributes(attr)
@@ -990,7 +989,7 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 			gp.Field = toElasticPipelineSelector(getStringAttributeString(attr))
 
 		case "target":
-			gp.TargetField = pointer(toElasticPipelineSelector(getStringAttributeString(attr)))
+			gp.TargetField = new(toElasticPipelineSelector(getStringAttributeString(attr)))
 
 		case "tag_on_failure":
 			onFailurePorcessors = DealWithTagOnFailure(attr, id, t)
@@ -1025,12 +1024,12 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 		if len(asn_properties) > 0 {
 			gp_asn := GeoIPProcessor{
 				Field:        gp.Field,
-				DatabaseFile: pointer("GeoLite2-ASN.mmdb"),
+				DatabaseFile: new("GeoLite2-ASN.mmdb"),
 				Properties:   &asn_properties,
 			}.WithTag(gp.GetTagOrDefault("") + "asn").(GeoIPProcessor)
 
 			if gp.TargetField != nil {
-				gp_asn.TargetField = pointer(*gp.TargetField + ".as")
+				gp_asn.TargetField = new(*gp.TargetField + ".as")
 			}
 			ingestProcessors = append(ingestProcessors, gp_asn)
 		}
@@ -1040,7 +1039,7 @@ func DealWithGeoIP(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor
 				Properties: &other_properties,
 			}.WithTag(id).(GeoIPProcessor)
 			if gp.TargetField != nil {
-				gp_other.TargetField = pointer(*gp.TargetField + ".geo")
+				gp_other.TargetField = new(*gp.TargetField + ".geo")
 			}
 			ingestProcessors = append(ingestProcessors, gp_other)
 		}
@@ -1071,13 +1070,13 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 			`)
 
 		case "regexes":
-			uap.RegexFile = pointer(getStringAttributeString(attr))
+			uap.RegexFile = new(getStringAttributeString(attr))
 
 		case "source":
 			uap.Field = toElasticPipelineSelector(getStringAttributeString(attr))
 
 		case "target":
-			uap.TargetField = pointer(toElasticPipelineSelector(getStringAttributeString(attr)))
+			uap.TargetField = new(toElasticPipelineSelector(getStringAttributeString(attr)))
 
 		default:
 			log.Warn().Msgf("Attribute '%s' in Plugin '%s' is currently not supported", attr.Name(), plugin.Name())
@@ -1091,7 +1090,7 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 		case "disabled":
 			// An empty field is not supported by Elasticsearch
 			// TODO --> Add an on-success processor to copy the original field in the root of the document
-			uap.TargetField = pointer("")
+			uap.TargetField = new("")
 		case "v8", "v1":
 			log.Debug().Msg("Nothing to do since the UserAgent Processor already uses user_agent as target field")
 		}
@@ -1135,7 +1134,7 @@ func DealWithUserAgent(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 			Field: &field,
 		}.
 			WithTag(id+"-remove-"+prefix+"-os").
-			WithIf(pointer(getIfFieldIsDefinedAndEmpty(prefix+"os")), true),
+			WithIf(new(getIfFieldIsDefinedAndEmpty(prefix+"os")), true),
 		)
 
 		// Rename the device.name to device (to do so you need first to copy it and remove it)
@@ -1187,7 +1186,7 @@ func DealWithGrok(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	gp := GrokProcessor{}.WithTag(id).(GrokProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -1327,7 +1326,7 @@ func DealWithURLDecode(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	udp := URLDecodeProcessor{}.WithTag(id).(URLDecodeProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -1395,7 +1394,7 @@ func DealWithCidr(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 		elastic_addresses = append(elastic_addresses, transformed_address)
 	}
 
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 	params["networks"] = networks
 
 	addressOutput := ""
@@ -1428,7 +1427,7 @@ throw new Exception('Could not find CIDR value');`, addressOutput))
 	}
 
 	ingestProcessors = append(ingestProcessors, ScriptProcessor{
-		Source: pointer(b.String()),
+		Source: new(b.String()),
 		Params: &params,
 	}.WithTag(id))
 
@@ -1469,7 +1468,7 @@ func DealWithSyslogPri(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 		case "ecs_compatibility":
 			ECSCompatibility = getStringAttributeString(attr)
 		case "syslog_pri_field_name":
-			field = pointer(getStringAttributeString(attr))
+			field = new(getStringAttributeString(attr))
 		case "severity_labels":
 			severityLabels = getArrayStringAttributes(attr)
 		case "facility_labels":
@@ -1482,9 +1481,9 @@ func DealWithSyslogPri(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	if field == nil {
 		switch ECSCompatibility {
 		case "disabled":
-			field = pointer("syslog_pri")
+			field = new("syslog_pri")
 		case "v1", "v8":
-			field = pointer("log.syslog.priority")
+			field = new("log.syslog.priority")
 		}
 	}
 
@@ -1524,13 +1523,13 @@ field('log.syslog.facility.code').set(facility);
 
 	if useLabels {
 		log.Debug().Msgf("UseLabels True")
-		params := make(map[string]interface{})
+		params := make(map[string]any)
 		params["facility"] = facilityLabels
 		params["severity"] = severityLabels
 		setValuesString = fmt.Sprintf("%s\n%s", setValuesString, useLabelsScript)
 		proc.Params = &params
 	}
-	proc.Source = pointer(fmt.Sprintf("%s\n%s", extractValue, setValuesString))
+	proc.Source = new(fmt.Sprintf("%s\n%s", extractValue, setValuesString))
 
 	ingestProcessors = append(ingestProcessors, proc)
 	return ingestProcessors, onFailureProcessor
@@ -1578,7 +1577,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 
 	constraintTranspiled := transpileConstraint(constraint)
 
-	onSuccessCondition := pointer(fmt.Sprintf("!(%s)", getIfFieldDefined(getUniqueOnFailureAddField(id))))
+	onSuccessCondition := new(fmt.Sprintf("!(%s)", getIfFieldDefined(getUniqueOnFailureAddField(id))))
 	onSuccessProcessors := DealWithCommonAttributes(plugin)
 	for i := range onSuccessProcessors {
 		// log.Info().Msgf("[%d] = %s %s", i, constraintTranspiled, onSuccessCondition)
@@ -1598,7 +1597,7 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	noncommonattrs := []ast.Attribute{}
 
 	for _, pa := range plugin.Attributes {
-		if !Contains(CommonAttributes, pa.Name()) {
+		if !slices.Contains(CommonAttributes, pa.Name()) {
 			noncommonattrs = append(noncommonattrs, pa)
 		}
 	}
@@ -1635,15 +1634,6 @@ func (t Transpile) DealWithPlugin(section string, plugin ast.Plugin, constraint 
 	return ingestProcessors
 }
 
-func Contains[T comparable](s []T, e T) bool {
-	for _, v := range s {
-		if v == e {
-			return true
-		}
-	}
-	return false
-}
-
 func getProcessorID(plugin ast.Plugin) string {
 	id, err := plugin.ID()
 	if err != nil {
@@ -1664,7 +1654,7 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 	}.WithTag(id).(KVProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -1672,9 +1662,9 @@ func DealWithKV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, [
 		case "tag_on_failure":
 			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
 		case "target":
-			kv.TargetField = pointer(getStringAttributeString(attr))
+			kv.TargetField = new(getStringAttributeString(attr))
 		case "prefix":
-			kv.Prefix = pointer(getStringAttributeString(attr))
+			kv.Prefix = new(getStringAttributeString(attr))
 		case "field_split":
 			kv.FieldSplit = getStringAttributeString(attr) // TODO: De-Escape chars???
 		case "exclude_keys":
@@ -1708,7 +1698,7 @@ func DealWithJSON(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor,
 	json := JSONProcessor{}.WithTag(id).(JSONProcessor)
 
 	for _, attr := range plugin.Attributes {
-		if Contains(CommonAttributes, attr.Name()) {
+		if slices.Contains(CommonAttributes, attr.Name()) {
 			continue
 		}
 		switch attr.Name() {
@@ -1737,7 +1727,7 @@ func DealWithDissect(plugin ast.Plugin, id string, t Transpile) ([]IngestProcess
 
 	proc := DissectProcessor{
 		// Dissect in Logstash always add a space in the appended information
-		AppendSeparator: pointer(" "),
+		AppendSeparator: new(" "),
 	}.WithTag(id).(DissectProcessor)
 
 	for _, attr := range plugin.Attributes {
@@ -1868,7 +1858,7 @@ func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, 
 
 	onSuccessProcessors := []IngestProcessor{}
 
-	proc := CSVProcessor{Field: "message", EmptyValue: pointer("")}.WithTag(id).(CSVProcessor)
+	proc := CSVProcessor{Field: "message", EmptyValue: new("")}.WithTag(id).(CSVProcessor)
 
 	prefix := ""
 
@@ -1884,9 +1874,9 @@ func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, 
 		case "autodetect_column_names":
 			autodetect_column_names = getBoolValue(attr)
 		case "separator":
-			proc.Separator = pointer(getStringAttributeString(attr))
+			proc.Separator = new(getStringAttributeString(attr))
 		case "quote_char":
-			proc.Quote = pointer(getStringAttributeString(attr))
+			proc.Quote = new(getStringAttributeString(attr))
 
 		// Deal with skip_empty_columns explicitely set
 		case "skip_empty_columns":
@@ -1894,7 +1884,7 @@ func DealWithCSV(plugin ast.Plugin, id string, t Transpile) ([]IngestProcessor, 
 			if skip_empty_columns {
 				proc.EmptyValue = nil
 			} else {
-				proc.EmptyValue = pointer("")
+				proc.EmptyValue = new("")
 			}
 		case "convert":
 			keys, values := getHashAttributeKeyValue(attr)
@@ -1942,7 +1932,7 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 
 	proc := ScriptProcessor{}.WithTag(id).(ScriptProcessor)
 
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 
 	var target *string = nil
 	ECSCompatibility := "v8" // We assume ECS Compatibility
@@ -1955,7 +1945,7 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 		case "tag_on_failure":
 			onFailureProcessors = DealWithTagOnFailure(attr, id, t)
 		case "destination", "target":
-			target = pointer(getStringAttributeString(attr))
+			target = new(getStringAttributeString(attr))
 
 		case "dictionary":
 
@@ -1969,7 +1959,7 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 			ECSCompatibility = getStringAttributeString(attr)
 
 		case "field", "source":
-			source = pointer(getStringAttributeString(attr))
+			source = new(getStringAttributeString(attr))
 
 		case "fallback":
 			params["fallback"] = getStringAttributeString(attr)
@@ -1983,7 +1973,7 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 	if target == nil {
 		switch ECSCompatibility {
 		case "disabled":
-			target = pointer("translation")
+			target = new("translation")
 		case "v1", "v8":
 			target = source
 		}
@@ -2005,9 +1995,9 @@ func DealWithTranslate(plugin ast.Plugin, id string, t Transpile) ([]IngestProce
 
 	b.WriteString(fmt.Sprintf(`if (tmp != null) { field('%s').set(tmp); }`, field))
 
-	proc.Source = pointer(b.String())
+	proc.Source = new(b.String())
 
-	proc.Description = pointer(fmt.Sprintf("Translate the field '%s' to field '%s'.", toElasticPipelineSelector(*source), toElasticPipelineSelector(*target)))
+	proc.Description = new(fmt.Sprintf("Translate the field '%s' to field '%s'.", toElasticPipelineSelector(*source), toElasticPipelineSelector(*target)))
 
 	ingestProcessors = append(ingestProcessors, proc)
 
@@ -2031,7 +2021,7 @@ func transpileConstraint(constraint Constraints) *string {
 		return nil
 	}
 	if len(constraint.Conditions) == 1 {
-		return pointer(transpileCondition(constraint.Conditions[0]))
+		return new(transpileCondition(constraint.Conditions[0]))
 	}
 	converted := "("
 	for i, cond := range constraint.Conditions {
@@ -2114,7 +2104,7 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 
 	if t.addCleanUpProcessor {
 		ip.Processors = append(ip.Processors, RemoveProcessor{
-			Field:         pointer([]string{TRANSPILER_PREFIX, "@metadata"}),
+			Field:         new([]string{TRANSPILER_PREFIX, "@metadata"}),
 			IgnoreMissing: true,
 		}.WithTag("cleanup-metadata").WithDescription("Cleanup temporary fields created by the transpiler"))
 	}
@@ -2129,14 +2119,14 @@ func (t Transpile) buildIngestPipeline(filename string, c ast.Config) []IngestPi
 
 func printPipeline(ips []IngestPipeline) {
 	// 1. Create a map to represent the top-level JSON object
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 
 	// 2. Populate the map with pipeline data
 	for _, pipeline := range ips {
 		// Assuming pipeline.String() returns a valid JSON string (even if multi-line).
 		// We'll unmarshal that inner JSON first so we can put the actual data
 		// (not the string representation) into the top-level map.
-		var pipelineData interface{}
+		var pipelineData any
 		err := json.Unmarshal([]byte(pipeline.String()), &pipelineData)
 		if err != nil {
 			// Handle error if inner pipeline string isn't valid JSON

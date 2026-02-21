@@ -6,8 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	config "github.com/herrBez/baffo"
 	"github.com/herrBez/baffo/ast"
 )
@@ -28,7 +26,7 @@ func (f Format) Run(args []string) error {
 	for _, filename := range args {
 		stat, err := os.Stat(filename)
 		if err != nil {
-			return errors.Errorf("%s: %v", filename, err)
+			return fmt.Errorf("%s: %v", filename, err)
 		}
 		if stat.IsDir() {
 			continue
@@ -38,24 +36,24 @@ func (f Format) Run(args []string) error {
 		if err != nil {
 			if errMsg, hasErr := config.GetFarthestFailure(); hasErr {
 				if !strings.Contains(err.Error(), errMsg) {
-					return errors.Errorf("%s: %v\n%s", filename, err, errMsg)
+					return fmt.Errorf("%s: %v\n%s", filename, err, errMsg)
 				}
 			}
-			return errors.Errorf("%s: %v", filename, err)
+			return fmt.Errorf("%s: %v", filename, err)
 		}
 
 		if f.writeToSource {
 			err := func() error {
 				f, err := os.Create(filename)
 				if err != nil {
-					return errors.Wrap(err, "failed to open file for writting with automatically fixed ID")
+					return fmt.Errorf("failed to open file for writting with automatically fixed ID: %w", err)
 				}
 				defer f.Close()
 
 				conf := c.(ast.Config)
 				_, err = f.WriteString(conf.String())
 				if err != nil {
-					return errors.Wrap(err, "failed to write file with automatically fixed ID")
+					return fmt.Errorf("failed to write file with automatically fixed ID: %w", err)
 				}
 
 				return nil

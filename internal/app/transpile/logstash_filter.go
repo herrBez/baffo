@@ -43,18 +43,19 @@ func hashAttributeToMapArray(attr ast.Attribute) map[string][]string {
 
 func getBoolValue(attr ast.Attribute) bool {
 	rawString := getStringAttributeString(attr)
-	if rawString == "true" {
+	switch rawString {
+	case "true":
 		return true
-	} else if rawString == "false" {
+	case "false":
 		return false
 	}
 	log.Panic().Msg("Unexpected")
 	return false
 }
 
-func getHashAttributeKeyValueUntyped(attr ast.Attribute) ([]string, []interface{}) {
+func getHashAttributeKeyValueUntyped(attr ast.Attribute) ([]string, []any) {
 	var keys []string
-	var values []interface{}
+	var values []any
 	switch t := attr.(type) {
 	case ast.HashAttribute:
 		for _, entry := range t.Entries {
